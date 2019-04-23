@@ -1,5 +1,5 @@
 //==============================================================================
-// depth_minimax_player.js
+// mobility_minimax_player.js
 //==============================================================================
 //------------------------------------------------------------------------------
 // Start-up:
@@ -30,7 +30,7 @@ var playclock = 0;
 
 var roles = seq();
 var state = null;
-var limit = 6;
+const padtime = 2500;
 
 //------------------------------------------------------------------------------
 
@@ -49,40 +49,42 @@ function start (id,r,rs,sc,pc)
 
 function play (id,move)
  {if (move!=='nil') {state = simulate(doesify(roles,move),state,library)};
+  const start = Date.now();
   if (roles.length > 1) {
-    return bestmovemulti(role, state, library);
+    return bestmovemulti(role, state, library, start);
   } else {
-    return bestmovesingle(role, state, library);
+    return bestmovesingle(role, state, library, start);
   }}
 
-function bestmovesingle(role, state, library){
+function bestmovesingle(role, state, library, start){
 var actions = findlegals(role, state, library);
   var action = actions[0];
   var score = 0;
   for (var i=0; i<actions.length; i++)
-      {
-        var result = maxscoresingle(role, simulate([actions[i]], state, library), library, 1);
+      {var result = maxscoresingle(role, simulate([actions[i]], state, library), library, start);
        if (result==100) {return actions[i][2]};
-       if (parseInt(result) > parseInt(score)) {
-        score = result; action = actions[i]
-      }
-    };
+       console.log(actions[i]);
+       console.log('result: ', result);
+       console.log('score: ', score);
+       if (parseInt(result) > parseInt(score)) {score = result; action = actions[i]}};
   return action[2]}
 
-function maxscoresingle(role, state, library, level)
+function maxscoresingle(role, state, library, start)
  {if (findterminalp(state, library))
      {return findreward(role, state, library)};
-
-  if (level >= limit) { return 0 };
+  const elapsed = Date.now() - start;
   var actions = findlegals(role, state, library);
+  if (elapsed >= ((playclock * 1000) - padtime)) {
+    return actions.length;
+  }
   var score = 0;
   for (var i=0; i<actions.length; i++)
-      {var result = maxscoresingle(role, simulate([actions[i]], state, library), library, level + 1);
+      {var result = maxscoresingle(role, simulate([actions[i]], state, library), library, start);
        if (result>score) {score = result}};
   return score}
 
 
-function bestmovemulti(role, state, library){
+function bestmovemulti(role, state, library, start){
     // find all legal moves
     var actions = findlegals(role, state, library);
 
@@ -92,13 +94,13 @@ function bestmovemulti(role, state, library){
     // iterate through all legal moves
     for (var i = 0; i < actions.length; i++){
 	// find minimax score if we make current move
-	var result = minscore(role, actions[i], state, library, 1); 
+	var result = minscore(role, actions[i], state, library, start); 
 	// bound at max score
 	if (result == 100){
 	    return actions[i][2];
 	}
 	// keep the best action
-	if (parseInt(result) > parseInt(score)){
+	if (result > score){
 	    score = result;
 	    action = actions[i];
 	}
@@ -108,7 +110,7 @@ function bestmovemulti(role, state, library){
 }
 
 
-function minscore(role, action, state, library, level){
+function minscore(role, action, state, library, start){
     // get opponent's role
     var opponent = findopponent(role, library);
 
@@ -128,7 +130,7 @@ function minscore(role, action, state, library, level){
 	// compute next state
 	var newstate = simulate(move, state, library); 
 	
-	var result = maxscoremulti(role, newstate, library, level + 1);
+	var result = maxscoremulti(role, newstate, library, start);
 	// bound at min score
 	if (result == 0){
 	    return 0;
@@ -156,15 +158,16 @@ function findopponent(role, library){
 }
 
 
-function maxscoremulti(role, state, library, level){
+function maxscoremulti(role, state, library, start){
     // determine if end state
     if (findterminalp(state, library)){
 	return findreward(role, state, library);
     }
 
-    if (level >= limit) {
-      return 0;
-    }
+  const elapsed = Date.now() - start;
+  if (elapsed >= ((playclock * 1000) - padtime)) {
+    return 0;
+  }
 
     // find legal actions 
     var actions = findlegals(role, state, library);
@@ -172,7 +175,7 @@ function maxscoremulti(role, state, library, level){
 
     // iterate through actions
     for (var i = 0; i < actions.length; i++){
-	var result = minscore(role, actions[i], state, library, level); 
+	var result = minscore(role, actions[i], state, library, start); 
 	// bound at max score
 	if (result == 100){
 	    return 100;
