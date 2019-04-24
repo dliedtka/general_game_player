@@ -132,24 +132,23 @@ function bestmovemulti(role, state, library, start){
     var isTerminal = false;
     // iterate through all legal moves
     for (var i = 0; i < actions.length; i++){
-	// find minimax score if we make current move
-	var [result, currIsTerminal] = minscore(role, actions[i], state, library, 1, start); 
-	// bound at max score
-	if (result == 100){
-	    return actions[i][2];
-	}
-	// keep the best action
-	if (parseInt(result) > parseInt(score)){
-	    score = result;
-	    action = actions[i];
-	} else if (parseInt(result) == parseInt(score) && !currIsTerminal) {
-    score = result;
-    action = actions[i];
-    isTerminal = currIsTerminal;
-  }
+      	// find minimax score if we make current move
+      	var [result, currIsTerminal] = minscore(role, actions[i], state, library, 1, start); 
+      	// bound at max score
+      	if (result == 100){
+      	    return [actions[i], result];
+      	}
+      	// keep the best action
+      	if (parseInt(result) > parseInt(score)){
+      	    score = result;
+      	    action = actions[i];
+      	} else if (parseInt(result) == parseInt(score) && !currIsTerminal) {
+          score = result;
+          action = actions[i];
+          isTerminal = currIsTerminal;
+        }
     }
-
-    return action[2];
+    return [action, score];
 }
 
 
@@ -162,25 +161,27 @@ function minscore(role, action, state, library, level, start){
     var score = 100;
     // iterate through opponent moves
     for (var i = 0; i < actions.length; i++){
-	var move;
-	if (role == roles[0]){
-	    move = [action, actions[i]];
-	}
-	else{
-	    move = [actions[i], action];
-	}
-	// compute next state
-	var newstate = simulate(move, state, library); 
-	
-	var [result, isTerminal] = maxscoremulti(role, newstate, library, level + 1, start);
-	// bound at min score
-	if (result == 0){
-	    return [0, isTerminal];
-	}
-	// keep lowest score
-	if (parseInt(result) < parseInt(score)){
-	    score = parseInt(result);
-	}
+      	var move;
+      	if (role == roles[0]){
+      	    move = [action, actions[i]];
+      	}
+      	else {
+      	    move = [actions[i], action];
+      	}
+
+      	// compute next state
+      	var newstate = simulate(move, state, library); 
+      	
+      	var [result, isTerminal] = maxscoremulti(role, newstate, library, level + 1, start);
+
+        // bound at min score
+      	if (result == 0){
+      	    return [0, isTerminal];
+      	}
+      	// keep lowest score
+      	if (parseInt(result) < parseInt(score)){
+      	    score = parseInt(result);
+      	}
   }
 
     return [score, isTerminal];
@@ -202,8 +203,8 @@ function findopponent(role, library){
 
 function maxscoremulti(role, state, library, level, start){
     // determine if end state
-    if (findterminalp(state, library)){
-	return [findreward(role, state, library), true];
+    if (findterminalp(state, library)) {
+	     return [findreward(role, state, library), true];
     }
 
     // find legal actions 
@@ -213,25 +214,25 @@ function maxscoremulti(role, state, library, level, start){
     if (level >= limit) {
       return [findreward(role, state, library), isTerminal];
     }
-  const elapsed = Date.now() - start;
-  if (elapsed >= ((playclock * 1000) - padtime)) {
-    return [0, isTerminal];
-  }    
+    const elapsed = Date.now() - start;
+    if (elapsed >= ((playclock * 1000) - padtime)) {
+      return [0, isTerminal];
+    }    
 
     // iterate through actions
     for (var i = 0; i < actions.length; i++){
-	var [result, currIsTerminal] = minscore(role, actions[i], state, library, level, start); 
-	// bound at max score
-	if (result == 100){
-	    return 100;
-	}
-	// keep best score
-	if (parseInt(result) > parseInt(score)){
-	    score = parseInt(result);
-	} else if (parseInt(result) == parseInt(score) && !currIsTerminal) {
-        score = result;
-        action = actions[i];
-        isTerminal = currIsTerminal;
+    	var [result, currIsTerminal] = minscore(role, actions[i], state, library, level, start); 
+    	// bound at max score
+    	if (result == 100) {
+    	    return [100, true];
+    	}
+    	// keep best score
+    	if (parseInt(result) > parseInt(score)){
+    	    score = parseInt(result);
+    	} else if (parseInt(result) == parseInt(score) && !currIsTerminal) {
+            score = result;
+            action = actions[i];
+            isTerminal = currIsTerminal;
       }
     }
 
