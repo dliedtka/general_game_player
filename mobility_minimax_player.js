@@ -30,7 +30,7 @@ var playclock = 0;
 
 var roles = seq();
 var state = null;
-const padtime = 2500;
+const padtime = 7000;
 
 //------------------------------------------------------------------------------
 
@@ -56,32 +56,63 @@ function play (id,move)
     return bestmovesingle(role, state, library, start);
   }}
 
-function bestmovesingle(role, state, library, start){
-var actions = findlegals(role, state, library);
-  var action = actions[0];
-  var score = 0;
-  for (var i=0; i<actions.length; i++)
-      {var result = maxscoresingle(role, simulate([actions[i]], state, library), library, start);
-       if (result==100) {return actions[i][2]};
-       console.log(actions[i]);
-       console.log('result: ', result);
-       console.log('score: ', score);
-       if (parseInt(result) > parseInt(score)) {score = result; action = actions[i]}};
-  return action[2]}
+function bestmovesingle(role, state, library, start) {
 
-function maxscoresingle(role, state, library, start)
- {if (findterminalp(state, library))
-     {return findreward(role, state, library)};
-  const elapsed = Date.now() - start;
+
+  var statesQueue = []
   var actions = findlegals(role, state, library);
-  if (elapsed >= ((playclock * 1000) - padtime)) {
-    return actions.length;
-  }
   var score = 0;
-  for (var i=0; i<actions.length; i++)
-      {var result = maxscoresingle(role, simulate([actions[i]], state, library), library, start);
-       if (result>score) {score = result}};
-  return score}
+  var timeRanOut = false
+
+  // Initialize queue with best next states from initial state
+  for (var i = 0; i < actions.length; i++) {
+    var nextState = simulate([actions[i]], state, library)
+    statesQueue.push([nextState, actions[i]])
+  }
+
+
+  var bestAction = actions[0]
+  while (statesQueue.length !== 0) {
+
+         // Populate the queue with the next states (state, initialAction)
+         var [currentState, associatedAction] = statesQueue.shift()
+         var nextActions = findlegals(role, currentState, library);
+         for (var i = 0; i < nextActions.length; i++) {
+             var nextState = simulate([nextActions[i]], currentState, library)
+             statesQueue.push([nextState, associatedAction])
+         }
+
+         // For current state, check the result, if terminal or if time ran out return heuristic
+         var result = -1
+         if (findterminalp(currentState, library))
+         {
+              result = parseInt(findreward(role, currentState, library))
+         };
+
+         const elapsed = Date.now() - start;
+         if (elapsed >= ((playclock * 1000) - padtime)) {
+             result = actions.length;
+             timeRanOut = true;
+         }
+
+         // If result is hundred, return associatedAction
+         if (result == 100) {
+             bestAction = associatedAction
+             break;
+         }
+
+         // If the result is better than the current score, replace the initialAction
+         if (result>score) {
+            score = result
+            bestAction = associatedAction
+         }
+
+         if (timeRanOut) {
+            break;
+         }
+    };
+    return bestAction[2]
+}
 
 
 function bestmovemulti(role, state, library, start){
@@ -136,7 +167,7 @@ function minscore(role, action, state, library, start){
 	    return 0;
 	}
 	// keep lowest score
-	if (result < score){
+	if (result < score) {
 	    score = result;
 	}
     }
