@@ -59,7 +59,7 @@ function play (id,move)
 
 function iddfs(role, state, library, start, bestmove) {
   var actions = findlegals(role, state, library);
-  var action = actions[0];
+  var action = [actions[0]];
   var score = 0;
 
   while(true) {
@@ -67,11 +67,13 @@ function iddfs(role, state, library, start, bestmove) {
     [curraction, currscore] = bestmove(role, state, library, start);
     const elapsed = Date.now() - start;
     if (elapsed >= ((playclock * 1000) - padtime)) {
-      return action[2];
+      return action[Math.floor(Math.random()*action.length)][2];
     }
     if (parseInt(currscore) > parseInt(score)) {
       score = parseInt(currscore);
-      action = curraction;
+      action = [curraction];
+    } else if (parseInt(currscore) == parseInt(score) && action.includes(curraction)) {
+      action.push(curraction);
     }
   }
 }
