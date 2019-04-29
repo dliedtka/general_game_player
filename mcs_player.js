@@ -30,7 +30,7 @@ var playclock = 0;
 
 var roles = seq();
 var state = null;
-var limit = 4;
+var limit = 2;
 
 //------------------------------------------------------------------------------
 
@@ -74,7 +74,8 @@ function montecarlo (role,state,count, library){
   //console.log("calling montecarlo")
   var total = 0;
   for (var i=0; i<count; i++) {
-    total = total + depthcharge(role,state, library)
+    newnum = depthcharge(role,state, library)
+    total = total + newnum
   };
   return total/count
 }
@@ -86,14 +87,16 @@ function randomelement(arr) {
 
 function depthcharge (role,state, library) {
     if (findterminalp(state,library)) {
+      //console.log("reward")
+      //console.log(findreward(role,state,library))
       return findreward(role,state,library)
     };
     var move = seq();
     for (var i=0; i<roles.length; i++) {
       var options = findlegals(roles[i],state,library);
-      move = randomelement(options)
+      move[i] = randomelement(options)
     };
-    var newstate = simulate([move],state, library);
+    var newstate = simulate(move,state, library);
     return depthcharge(role,newstate, library)
  }
 
@@ -103,7 +106,7 @@ function maxscoresingle(role, state, library, level)
   if (findterminalp(state, library))
      {return findreward(role, state, library)};
 
-  if (level >= limit) {return montecarlo(role,state,8,library)};
+  if (level >= limit) {return montecarlo(role,state,4,library)};
   var actions = findlegals(role, state, library);
   var score = 0;
   for (var i=0; i<actions.length; i++) {
@@ -126,18 +129,23 @@ function bestmovemulti(role, state, library){
     var score = 0;
 
     // iterate through all legal moves
-    for (var i = 0; i < actions.length; i++){
-	// find minimax score if we make current move
-	var result = minscore(role, actions[i], state, library, 1); 
-	// bound at max score
-	if (result == 100){
-	    return actions[i][2];
-	}
-	// keep the best action
-	if (parseInt(result) > parseInt(score)){
-	    score = result;
-	    action = actions[i];
-	}
+    for (var i = 0; i < actions.length; i++) {
+    	// find minimax score if we make current move
+    	var result = minscore(role, actions[i], state, library, 1); 
+    	// bound at max score
+    	if (result == 100){
+    	    return actions[i][2];
+    	}
+    	// keep the best action
+    	if (parseInt(result) > parseInt(score)){
+    	    score = result;
+    	    action = actions[i];
+    	}
+
+      if (parseInt(result) == parseInt(score) && Math.random() < 0.3){
+          score = result;
+          action = actions[i];
+      }
     }
 
     return action[2];
@@ -152,27 +160,29 @@ function minscore(role, action, state, library, level){
     var actions = findlegals(opponent, state, library);
 
     var score = 100;
+
     // iterate through opponent moves
     for (var i = 0; i < actions.length; i++){
-	var move;
-	if (role == roles[0]){
-	    move = [action, actions[i]];
-	}
-	else{
-	    move = [actions[i], action];
-	}
-	// compute next state
-	var newstate = simulate(move, state, library); 
-	
-	var result = maxscoremulti(role, newstate, library, level + 1);
-	// bound at min score
-	if (result == 0){
-	    return 0;
-	}
-	// keep lowest score
-	if (result < score){
-	    score = result;
-	}
+    	var move;
+    	if (role == roles[0]){
+    	    move = [action, actions[i]];
+    	}
+    	else {
+    	    move = [actions[i], action];
+    	}
+    	// compute next state
+    	var newstate = simulate(move, state, library); 
+    	
+    	var result = maxscoremulti(role, newstate, library, level + 1);
+
+    	// bound at min score
+    	if (result == 0){
+    	    return 0;
+    	}
+    	// keep lowest score
+    	if (result < score){
+    	    score = result;
+    	}
     }
 
     return score;
@@ -195,28 +205,28 @@ function findopponent(role, library){
 function maxscoremulti(role, state, library, level){
     // determine if end state
     if (findterminalp(state, library)){
-	return findreward(role, state, library);
-    }
-
-    if (level >= limit) {
-      return findreward(role, state, library);
+	     return findreward(role, state, library);
     }
 
     // find legal actions 
     var actions = findlegals(role, state, library);
     var score = 0;
 
+    if (level >= limit) {
+      return montecarlo(role,state,4,library);
+    }
+
     // iterate through actions
     for (var i = 0; i < actions.length; i++){
-	var result = minscore(role, actions[i], state, library, level); 
-	// bound at max score
-	if (result == 100){
-	    return 100;
-	}
-	// keep best score
-	if (result > score){
-	    score = result;
-	}
+      var result = minscore(role, actions[i], state, library, level); 
+      // bound at max score
+      if (result == 100) {
+          return 100;
+      }
+      // keep best score
+      if (result > score){
+          score = result;
+      }
     }
 
     return score;
