@@ -72,8 +72,10 @@ function iterative_depthcharge(role, state, library, start, bestmove) {
     depthchargelimit += 1;
     console.log(depthchargelimit);
     [curraction, currscore] = bestmove(role, state, library, start);
+    // console.log('current action: ' + action + ': ' + score + ', new action: ' + curraction[2] + ': ' + currscore);
     const elapsed = Date.now() - start;
     if (elapsed >= ((playclock * 1000) - padtime)) {
+      console.log('Found move: ' + action[2] + ', ' + score);
       return action[2];
     }
     if (parseInt(currscore) >= parseInt(score)) {
@@ -193,7 +195,10 @@ function bestmovemulti(role, state, library, start){
         if (elapsed >= ((playclock * 1000) - padtime)) {
           return [action, score];
         }
-        var opponentState = simulate([actions[i]], state, library); 
+        var opponentState = simulate([actions[i]], state, library);
+        if (findterminalp(opponentState, library) && findreward(role, opponentState, library) == 100) {
+          return [actions[i], 150];
+        }
         var opponent = findopponent(role, library);
         opponentMoves = findlegals(opponent, opponentState, library);
         var opponentWins = false;
@@ -220,7 +225,8 @@ function bestmovemulti(role, state, library, start){
           return [usefulActions[i], 100];
       }
       // keep the best action
-      if (parseInt(result) > parseInt(score)){
+      // console.log('current action: ' + action[2] + ': ' + score + ', new action: ' + usefulActions[i][2] + ': ' + result);
+      if (result > score){
           score = result;
           action = usefulActions[i];
       }
