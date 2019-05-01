@@ -102,11 +102,19 @@ function bestmovesingle(role, state, library) {
 
 function montecarlo (role,state,count, library, start){
   console.log("calling montecarlo")
+  
+  const mc_start = Date.now();
+
   var total = 0;
   for (var i=0; i<count; i++) {
     newnum = depthcharge(role,state, library, start, 1)
     total = total + newnum
   };
+
+  elapsed_mc = (Date.now() - mc_start) / 1000;
+
+  console.log("montecarlo finished. ran " + count + " depth charges in " + elapsed_mc + " seconds, " + (count / elapsed_mc) + " per second.");
+
   return total/count;
 }
 
