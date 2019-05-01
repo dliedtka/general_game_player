@@ -32,7 +32,7 @@ var roles = seq();
 var state = null;
 var limit = 2;
 const padtime = 2500;
-var depthchargelimit = 8;
+var depthchargelimit = 4;
 
 //------------------------------------------------------------------------------
 
@@ -52,7 +52,7 @@ function start (id,r,rs,sc,pc)
 function play (id,move)
  {if (move!=='nil') {state = simulate(doesify(roles,move),state,library)};
   var start = Date.now();
-  depthchargelimit = 8;
+  depthchargelimit = 4;
   if (roles.length > 1) {
     return iterative_depthcharge(role, state, library, start, bestmovemulti);
   } else {

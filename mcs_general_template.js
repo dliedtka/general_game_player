@@ -32,6 +32,7 @@ var roles = seq();
 var state = null;
 var limit = 1;
 const padtime = 2500;
+var depthchargelimit = 8;
 
 //------------------------------------------------------------------------------
 
@@ -50,8 +51,12 @@ function start (id,r,rs,sc,pc)
 
 function play (id,move){
     const starttime = Date.now();
+    depthchargelimit = 8;
+    if (roles.length == 1) {
+      limit = 3;
+    }
     if (move!=='nil') {state = simulate(doesify(roles,move),state,library)};
-    return bestmove(role, state, library, starttime);
+    return iterative_depthcharge(role, state, library, starttime);
 
     /*
     if (roles.length > 1) {
@@ -69,53 +74,110 @@ function randomelement(arr) {
     return item;
 }
 
+function iterative_depthcharge(role, state, library, start) {
+  var actions = findlegals(role, state, library);
+  var action = actions[0];
+  var score = 0;
+
+  if (actions.length == 1) {
+    return action[2];
+  }
+
+  while(true) {
+    depthchargelimit += 1;
+    console.log(depthchargelimit);
+    [curraction, currscore] = bestmove(role, state, library, start);
+    // console.log('current action: ' + action + ': ' + score + ', new action: ' + curraction[2] + ': ' + currscore);
+    const elapsed = Date.now() - start;
+    if (elapsed >= ((playclock * 1000) - padtime)) {
+      console.log('Found move: ' + action[2] + ', ' + score);
+      return action[2];
+    }
+    if (parseInt(currscore) >= parseInt(score)) {
+      score = parseInt(currscore);
+      action = curraction;
+    }
+  }
+}
+
 
 // best move
 function bestmove(role, state, library, starttime){
 
     // find all legal moves
     var actions = findlegals(role, state, library);
-
     actions.sort(() => Math.random() - 0.5);
 
     var action = actions[0];
     var score = 0;
 
-    if (actions.length == 1)
-	return action[2];
-
     // iterate through all legal moves
     for (var i = 0; i < actions.length; i++) {
 
-	// timeout protection
-	const elapsed = Date.now() - starttime;
-	if (elapsed >= ((playclock * 1000) - padtime)) {
-	    return action[2];
-	}
+      // max score if only player
+      if (roles.length == 1){
+          var result = parseInt(maxscore(role, simulate([actions[i]], state, library), library, 0, starttime));
+      } else {
+        const elapsed = Date.now() - start;
+        if (elapsed >= ((playclock * 1000) - padtime)) {
+          return [action, score];
+        }
+        var opponentState = simulate([actions[i]], state, library);
+        if (findterminalp(opponentState, library) && findreward(role, opponentState, library) == 100) {
+          return [actions[i], 150];
+        }
+        var current_idx = 0;
+        for (var j = 0; j < roles.length; j++) {
+          if (role == roles[j]) {
+            current_idx = j + 1;
+            if (current_idx == roles.length) {
+              current_idx = 0;
+            }
+            break;
+          }
+        }
 
-	// max score if only player
-	if (roles.length == 1){
-	    var result = parseInt(maxscore(role, state, library, level, starttime));
-	}
-	// find minimax score if we make current move, more than 1 player
-	else{
-	    var result = parseInt(minscore(role, actions[i], state, library, 0, starttime, 0, seq())); 
-	}
+        var opponentWins = false;
+        while (roles[current_idx] != role) {
+          var opponent = roles[current_idx];
+          opponentMoves = findlegals(opponent, opponentState, library);
+          for (var j = 0; j < opponentMoves.length; j++) {
+              var nextState = simulate([opponentMoves[j]], opponentState, library); 
+              if (findterminalp(nextState, library) && findreward(opponent, nextState, library) == 100) {
+                  opponentWins = true;
+                  break;
+              }
+          }
+          if (opponentWins) {
+            break;
+          }
+          current_idx += 1;
+          if (current_idx == roles.length) {
+            current_idx = 0;
+          }
+        }
+        if (opponentWins) {
+          console.log('losing state... skipping');
+          continue;
+        }
+  	   // find minimax score if we make current move, more than 1 player
+  	   var result = parseInt(minscore(role, actions[i], state, library, 0, starttime, 0, seq()));
+     }
 	
 	// maybe reinstate, max montecarlo at 99?
     	// bound at max score
-    	if (result == 100){
-    	    return actions[i][2];
-    	}
-	
-    	// keep the best action
-    	if (parseInt(result) > parseInt(score)){
-    	    score = result;
-    	    action = actions[i];
-    	}
-    }
+  	if (result >= 100){
+  	    return [actions[i], result];
+  	}
 
-    return action[2];
+  	// keep the best action
+  	if (parseInt(result) > parseInt(score)){
+  	    score = result;
+  	    action = actions[i];
+  	}
+  }
+
+    return [action, score];
 }
 
 
@@ -139,20 +201,20 @@ function maxscore(role, state, library, level, starttime){
 
     // monte carlo
     if (level >= limit) {
-	//return montecarlo(role,state,4,library);
-	var mcs_score = parseInt(montecarlo(role,state,4,library, starttime));
-	console.log(mcs_score);
-	// if 100 subtract 1?  if 0 add 1? avoid definite loss, avoid missing definite win
-	return parseInt(mcs_score);
+    	//return montecarlo(role,state,4,library);
+    	var mcs_score = montecarlo(role,state, depthchargelimit,library, starttime);
+    	// if 100 subtract 1?  if 0 add 1? avoid definite loss, avoid missing definite win
+    	return parseInt(mcs_score);
     }
 
     // iterate through actions
     for (var i = 0; i < actions.length; i++){
 	if (roles.length == 1){
-	    var result = parseInt(maxscore(role, state, library, level, starttime));
+	    var result = parseInt(maxscore(role, simulate([actions[i]], state, library), library, level + 1, starttime));
 	}
 	else{
-	    var result = parseInt(minscore(role, actions[i], state, library, level)); 
+
+	    var result = parseInt(minscore(role, actions[i], state, library, level, starttime, 0, seq())); 
 	}
 
 	// make distinction for non monte carlo?
@@ -175,7 +237,6 @@ function maxscore(role, state, library, level, starttime){
 function minscore(role, action, state, library, level, starttime, opponent_idx, move){
     
     // if opponent counter is outside indices of roles, we have a complete move sequence
-    
     // if current role is player, we are starting
     if (roles[opponent_idx] == role){
 
@@ -188,11 +249,10 @@ function minscore(role, action, state, library, level, starttime, opponent_idx, 
     // if current role is an opponent, iterate through all moves
     else if (opponent_idx < roles.length){
 
-	var opponent = roles[opponentIdx];
+	var opponent = roles[opponent_idx];
 	var actions = findlegals(opponent, state, library);
 
 	var score = 100;
-
 	for (var i = 0; i < actions.length; i++){
 	    move[opponent_idx] = actions[i];
 
@@ -228,10 +288,15 @@ function minscore(role, action, state, library, level, starttime, opponent_idx, 
 
 function montecarlo(role, state, count, library, starttime){
   var total = 0;
+  const mc_start = Date.now();
   for (var i = 0; i < count; i++) {
       newnum = depthcharge(role, state, library, starttime);
       total = total + newnum;
   }
+
+  elapsed_mc = (Date.now() - mc_start) / 1000;
+
+  console.log("montecarlo finished. ran " + count + " depth charges in " + elapsed_mc + " seconds, " + (count / elapsed_mc) + " per second.");
   return total / count;
 }
 
