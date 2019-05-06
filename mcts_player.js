@@ -84,40 +84,48 @@ function mcts(role, state, library, start_time){
 
     // repeat until out of time
     while((Date.now() - start_time) < (playclock * 1000 - padtime)){
-
+	//console.log("point 1");
 	// selection
-	current_node = select(root);
-
-	// expansion //******* need to check this and simulation, should simulation and backpropogate be getting current_node?
-	expand(node, current_role_idx);
-
+	current_node = select(root, library);
+	//console.log("point 2");
+	// expansion 
+	expand(current_node, current_role_idx, library);
+	//console.log("point 3");
 	// simulation
 	var end_utility = simulation(roles[current_node.current_role_idx], current_node.state, library);
-
-	// backpropogation
-	backpropogate(current_node, end_utility);
-
+	//console.log("point 4");
+	// backpropogation // ******** fix for minimizing nodes
+	backpropagate(current_node, end_utility);
+	//console.log("point 5");
 	// next role
 	current_role_idx = find_next_role_idx(current_role_idx);
+	//console.log("point 6");
+	//console.log("elapsed: " + (Date.now() - start_time) + " breaktime: " + (playclock * 1000 - padtime));
     }
-
+    //console.log("point 7");
+    //console.log("parent state: " + state);
+    //console.log("should match: " + root.state);
+    //console.log("parent visits: " + root.num_visits);
     // choose highest average move or most visited (almost always will be the same)
     var score = 0;
-    var action = node.children[0].action;
-    for (var i = 0; i < node.children; i++){
-	var newscore = node.children[i].total_utility / node.children[i].num_visits;
+    var action = root.children[0].action;
+    for (var i = 0; i < root.children.length; i++){
+	var newscore = root.children[i].total_utility / root.children[i].num_visits;
+	//console.log("action: " + root.children[i].action + " utility: " + root.children[i].total_utility + " numvisits: " + root.children[i].num_visits + " score: " + newscore);
+	//console.log("new state: " + root.children[i].state);
 	if (newscore > score){
 	    score = newscore;
-	    action = node.children[i].action;
+	    action = root.children[i].action;
 	}
     }
     
-    return action;
+    //console.log("returning: " + action[2]);
+    return action[2];
 }
 
 
 function find_next_role_idx(current_role_idx){
-    for (var i; i < roles.length; i++){
+    for (var i = 0; i < roles.length; i++){
 	if (roles[i] == roles[current_role_idx]){
 	    if (i == roles.length - 1){
 		return 0;
@@ -132,10 +140,11 @@ function find_next_role_idx(current_role_idx){
 
 // a node has a state, role whose turn it is, parent node, a sequence of children nodes, num_vists, total_utility, a move to make
 function generate_node(state, current_role_idx, parent, library, move, last_action){
-    var node;
+    var node = {};
 
     node["state"] = state;
-    node["current_role_idx"] = current_role_idx;
+
+    node["current_role_idx"] = current_role_idx; // index of which role is selecting a move at current node
     node["parent"] = parent;
     if (findterminalp(state, library)){
 	node["children"] = "terminal";
@@ -145,19 +154,23 @@ function generate_node(state, current_role_idx, parent, library, move, last_acti
     }
     node["num_visits"] = 0;
     node["total_utility"] = 0;
-    node["move"] = move;
-    node["action"] = last_action;
+    node["move"] = move; // sequence that will be the next move (every role must make a move, simulate to new state after roles.length nodes)
+    node["action"] = last_action; // action from parent node that led to this node
 
     return node;
 }
 
 
-function select(node){
-
+function select(node, library){
+    
     if (node.num_visits == 0){
 	return node;
     }
-    
+
+    if (node.children === "terminal"){
+	return node;
+    }
+
     for (var i = 0; i < node.children.length; i++){
 	if (node.children[i].num_visits == 0){
 	    return node.children[i];
@@ -175,25 +188,32 @@ function select(node){
 	}
     }
     
-    return select(result)
+    return select(result, library);
 }
 
 
 function selectfn(node){
     return node.total_utility / node.num_visits + Math.sqrt(2 * Math.log(node.parent.num_visits) / node.num_visits);
+    //return Math.random();
 }
 
 
-// only simulate if current role is last role
+// only simulate to new state if current role is last role (because then all roles have added a new action to move)
 function expand(node, current_role_idx, library){
+    
+    // auto return an end state (no states left to add)
+    if (node.children === "terminal"){
+	return true;    
+    }
+	
     var actions = findlegals(roles[current_role_idx], node.state, library);
     
     for (var i = 0; i < actions.length; i++){
 	// set move to action for corresponding role
 	node.move[current_role_idx] = actions[i]
 
-	if (find_next_role_idx(current_role_idx) == roles[0]){
-	    var newstate = simulate(node.move, node.state); 
+	if (find_next_role_idx(current_role_idx) == 0){
+	    var newstate = simulate(node.move, node.state, library); 
 	}
 	else{
 	    var newstate = node.state;
@@ -208,7 +228,7 @@ function expand(node, current_role_idx, library){
 
 function simulation(role, state, library){
     var newstate = state;
-
+    //console.log("start move");
     while (!findterminalp(newstate,library)){
 
 	var move = seq();
@@ -216,19 +236,20 @@ function simulation(role, state, library){
 	    var actions = findlegals(roles[i], newstate, library);
 	    move[i] = randomelement(actions);
 	}
-
+	//console.log(move);
 	newstate = simulate(move, newstate, library);
     }
-
+    //console.log("end move, reward " + findreward(role,newstate,library));
+    //throw "test";
     return parseInt(findreward(role, newstate, library));
 }
 
 
-function backpropogation(node, score){
+function backpropagate(node, score){
     node.num_visits = node.num_visits + 1;
     node.total_utility = node.total_utility + score;
     if (node.parent !== "root"){
-	backpropagate(node.parent,score);
+	backpropagate(node.parent, score);
     }
     return true;
 }
