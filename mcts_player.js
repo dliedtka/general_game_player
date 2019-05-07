@@ -93,7 +93,7 @@ function mcts(role, state, library, start_time){
 	// simulation
 	var end_utility = simulation(role, library, current_node);
 
-	// backpropogation // ******** not 100% sure if min and max nodes are working properly, but pretty sure
+	// backpropogation 
 	backpropagate(current_node, end_utility, true, role);
     }
 
