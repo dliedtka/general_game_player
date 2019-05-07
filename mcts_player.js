@@ -91,9 +91,9 @@ function mcts(role, state, library, start_time){
 	expand(current_node, library);
 
 	// simulation
-	var end_utility = simulation(roles[current_node.current_role_idx], library, current_node);
+	var end_utility = simulation(role, library, current_node);
 
-	// backpropogation // ******** not 100% sure if min and max nodes are working properly
+	// backpropogation // ******** not 100% sure if min and max nodes are working properly, but pretty sure
 	backpropagate(current_node, end_utility, true, role);
     }
 
@@ -236,16 +236,13 @@ function simulation(role, library, node){
     var newstate = node.state;
     while (!findterminalp(newstate,library)){
 
+	// for debugging simulation of games
 	//if (first_loop){
-	//console.log("\nsimulating");
-	//console.log("state: " + node.state);
-	//console.log("should be the same: " + state);
-	//console.log("role: " + node.current_role_idx);
-	//console.log("action: " + node.action);
-	//console.log("move: " + node.move);
-	//}
-	//else{
-	//console.log("state: " + newstate);
+	//    console.log("\nsimulating");
+	//    console.log("state: " + node.state);
+	//    console.log("role: " + node.current_role_idx);
+	//    console.log("action: " + node.action);
+	//   console.log("move: " + node.move);
 	//}
 
 	// random move with some exceptions
@@ -264,13 +261,17 @@ function simulation(role, library, node){
 	    }
 	}
 	
+	// more debugging
 	//console.log("random move: " + move);
+	//console.log("new state: " + newstate);
 
 	newstate = simulate(move, newstate, library);
 
 	first_loop = false;
     }
 
+    // more debugging
+    //console.log("reward: " + findreward(role,newstate,library));
     //console.log("end simulating\n");
 
     return parseInt(findreward(role, newstate, library));
@@ -341,19 +342,22 @@ function backpropagate(node, score, first_call, role){
 	    node.total_utility = node.total_utility + minscore;
 	}
 
-	// more debugging except for backpropogate call
+	// more debugging
 	//console.log("after util: " + node.total_utility);
 	//console.log("after visits: " + node.num_visits);
 	//console.log("after score: " + node.total_utility / node.num_visits);
+	//if (node.parent !== "root"){
+	//    console.log("now calling state: " + node.parent.state);
+	//    console.log("now calling action: " + node.parent.action);
+	//    console.log("now calling role: " + node.parent.current_role_idx);
+	//    console.log(" ");
+	//}
+	//else{
+	//    console.log(" ");
+	//}
+
 	if (node.parent !== "root"){
-	    //console.log("now calling state: " + node.parent.state);
-	    //console.log("now calling action: " + node.parent.action);
-	    //console.log("now calling role: " + node.parent.current_role_idx);
-	    //console.log(" ");
 	    backpropagate(node.parent, score, false, role);
-	}
-	else{
-	    //console.log(" ");
 	}
     }
 
