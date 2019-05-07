@@ -91,7 +91,7 @@ function mcts(role, state, library, start_time){
 	expand(current_node, library);
 
 	// simulation
-	var end_utility = simulation(roles[current_node.current_role_idx], current_node.state, library);
+	var end_utility = simulation(roles[current_node.current_role_idx], library, current_node);
 
 	// backpropogation // ******** not 100% sure if min and max nodes are working properly
 	backpropagate(current_node, end_utility, true, role);
@@ -115,7 +115,7 @@ function mcts(role, state, library, start_time){
     // more logging
     var elapsed = (Date.now() - start_time) / 1000;
     console.log("" + root.num_visits + " games simulated in " + elapsed + " seconds; " + (root.num_visits/elapsed) + " simulations per second");
-    console.log("current projected utility: " + root.total_utility / root.num_visits);
+    console.log("current projected utility: " + score);
 
     return action[2];
 }
@@ -229,20 +229,49 @@ function expand(node, library){
 }
 
 
-function simulation(role, state, library){
+function simulation(role, library, node){
 
-    var newstate = state;
+    var first_loop = true;
+
+    var newstate = node.state;
     while (!findterminalp(newstate,library)){
 
-	// random move
+	//if (first_loop){
+	//console.log("\nsimulating");
+	//console.log("state: " + node.state);
+	//console.log("should be the same: " + state);
+	//console.log("role: " + node.current_role_idx);
+	//console.log("action: " + node.action);
+	//console.log("move: " + node.move);
+	//}
+	//else{
+	//console.log("state: " + newstate);
+	//}
+
+	// random move with some exceptions
+	// on the first iteration of the while loop only:
+	// random move for undecided roles only
+	// if node n has control over current node, all nodes less than n have decided on an action and stored in node.move
+	// don't want to overwrite those actions just because we have yet to transition to a new state
 	var move = seq();
 	for (var i = 0; i < roles.length; i++){
-	    var actions = findlegals(roles[i], newstate, library);
-	    move[i] = randomelement(actions);
+	    if (first_loop && (i < node.current_role_idx)){
+		move[i] = node.move[i];
+	    }
+	    else{
+		var actions = findlegals(roles[i], newstate, library);
+		move[i] = randomelement(actions);
+	    }
 	}
+	
+	//console.log("random move: " + move);
 
 	newstate = simulate(move, newstate, library);
+
+	first_loop = false;
     }
+
+    //console.log("end simulating\n");
 
     return parseInt(findreward(role, newstate, library));
 }
