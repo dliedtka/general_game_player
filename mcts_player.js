@@ -29,6 +29,7 @@ var startclock = 0;
 var playclock = 0;
 
 var roles = seq();
+var roles2 = seq()
 var state = null;
 const padtime = 2500;
 
@@ -50,6 +51,7 @@ function start (id,r,rs,sc,pc)
 function play (id,move){
     const start_time = Date.now();
     if (move!=='nil') {state = simulate(doesify(roles,move),state,library)};
+    roles2 = fix_roles(role);
     return bestmove(role, state, library, start_time);
 }
 
@@ -57,6 +59,38 @@ function play (id,move){
 function randomelement(arr) {
     var item = arr[Math.floor(Math.random()*arr.length)];
     return item;
+}
+
+
+function fix_roles(role){
+    var new_roles = roles.slice();
+
+    for (var player_idx = 0; player_idx < roles.length; player_idx++){
+	if (roles[player_idx] == role){
+	    break;
+	}
+    }
+
+    new_roles[0] = roles[player_idx];
+    new_roles[player_idx] = roles[0];
+
+    return new_roles;
+}
+
+
+function swap_back(move){
+    var new_move = move.slice();
+
+    for (var player_idx = 0; player_idx < roles.length; player_idx++){
+	if (roles[player_idx] == role){
+	    break;
+	}
+    }
+
+    new_move[0] = move[player_idx];
+    new_move[player_idx] = move[0];
+
+    return new_move;
 }
 
 
@@ -122,9 +156,9 @@ function mcts(role, state, library, start_time){
 
 
 function find_next_role_idx(current_role_idx){
-    for (var i = 0; i < roles.length; i++){
-	if (roles[i] == roles[current_role_idx]){
-	    if (i == roles.length - 1){
+    for (var i = 0; i < roles2.length; i++){
+	if (roles2[i] == roles2[current_role_idx]){
+	    if (i == roles2.length - 1){
 		return 0;
 	    }
 	    else{
@@ -151,7 +185,7 @@ function generate_node(state, current_role_idx, parent, library, move, last_acti
     }
     node["num_visits"] = 0;
     node["total_utility"] = 0;
-    node["move"] = move; // sequence that will be the next move (every role must make a move, simulate to new state after roles.length nodes)
+    node["move"] = move; // sequence that will be the next move (every role must make a move, simulate to new state after roles2.length nodes)
     node["action"] = last_action; // action from parent node that led to this node
 
     return node;
@@ -205,7 +239,7 @@ function expand(node, library){
 	return true;    
     }
 
-    var actions = findlegals(roles[node.current_role_idx], node.state, library);
+    var actions = findlegals(roles2[node.current_role_idx], node.state, library);
 
     // add a node for all successors (one successor for each legal action)
     for (var i = 0; i < actions.length; i++){
@@ -216,7 +250,7 @@ function expand(node, library){
 
 	// only simulate for last role
 	if (find_next_role_idx(node.current_role_idx) == 0){
-	    var newstate = simulate(newmove, node.state, library); 
+	    var newstate = simulate(swap_back(newmove), node.state, library); 
 	}
 	else{
 	    var newstate = node.state;
@@ -251,12 +285,12 @@ function simulation(role, library, node){
 	// if node n has control over current node, all nodes less than n have decided on an action and stored in node.move
 	// don't want to overwrite those actions just because we have yet to transition to a new state
 	var move = seq();
-	for (var i = 0; i < roles.length; i++){
+	for (var i = 0; i < roles2.length; i++){
 	    if (first_loop && (i < node.current_role_idx)){
 		move[i] = node.move[i];
 	    }
 	    else{
-		var actions = findlegals(roles[i], newstate, library);
+		var actions = findlegals(roles2[i], newstate, library);
 		move[i] = randomelement(actions);
 	    }
 	}
@@ -265,7 +299,7 @@ function simulation(role, library, node){
 	//console.log("random move: " + move);
 	//console.log("new state: " + newstate);
 
-	newstate = simulate(move, newstate, library);
+	newstate = simulate(swap_back(move), newstate, library);
 
 	first_loop = false;
     }
@@ -289,7 +323,7 @@ function backpropagate(node, score, first_call, role){
     //console.log("prev visits: " + node.num_visits);
     //console.log("prev score: " + node.total_utility / node.num_visits);
     
-    if (roles.length == 1){
+    if (roles2.length == 1){
 	node.num_visits = node.num_visits + 1;
 	node.total_utility = node.total_utility + score;
 	if (node.parent !== "root"){
@@ -308,7 +342,7 @@ function backpropagate(node, score, first_call, role){
 	}
 
 	// player controlled nodes add max utility per visit of children
-	else if (roles[node.current_role_idx] == role){
+	else if (roles2[node.current_role_idx] == role){
 	    var maxscore = 0;
 	    for (var i = 0; i < node.children.length; i++){
 		// don't look at unvisited children (0/0 will propogate up, cause error)
