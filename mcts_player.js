@@ -100,8 +100,87 @@ function bestmove(role, state, library, start_time){
     if (actions.length == 1){
 	return actions[0][2];
     }
+    var possible_actions = [];
+    if (roles.length > 1) {
+	    // iterate through all legal moves
+	    for (var i = 0; i < actions.length; i++) {
+	        var opponentState = simulate([actions[i]], state, library);
+
+	        var current_idx = 0;
+	        for (var j = 0; j < roles.length; j++) {
+	          if (role == roles[j]) {
+	            current_idx = j + 1;
+	            if (current_idx == roles.length) {
+	              current_idx = 0;
+	            }
+	            break;
+	          }
+	        }
+
+	        var opponentWins = false;
+	        while (roles[current_idx] != role) {
+	          var opponent = roles[current_idx];
+	          opponentMoves = findlegals(opponent, opponentState, library);
+	          for (var j = 0; j < opponentMoves.length; j++) {
+	              var nextState = simulate([opponentMoves[j]], opponentState, library); 
+	              if (findterminalp(nextState, library) && findreward(opponent, nextState, library) == 100) {
+	                  opponentWins = true;
+	                  break;
+	              }
+	          }
+	          if (opponentWins) {
+	            break;
+	          }
+	          current_idx += 1;
+	          if (current_idx == roles.length) {
+	            current_idx = 0;
+	          }
+	        }
+	        if (!opponentWins) {
+	          possible_actions.push(actions[i]);
+	        }
+	    }
+	} else {
+		possible_actions = actions;
+	}
     
     return mcts(role, state, library, start_time);
+}
+
+function check_bad_state(action, state, library, role) {
+	var opponentState = simulate([action], state, library);
+
+    var current_idx = 0;
+    for (var j = 0; j < roles.length; j++) {
+      if (role == roles[j]) {
+        current_idx = j + 1;
+        if (current_idx == roles.length) {
+          current_idx = 0;
+        }
+        break;
+      }
+    }
+
+    var opponentWins = false;
+    while (roles[current_idx] != role) {
+      var opponent = roles[current_idx];
+      opponentMoves = findlegals(opponent, opponentState, library);
+      for (var j = 0; j < opponentMoves.length; j++) {
+          var nextState = simulate([opponentMoves[j]], opponentState, library); 
+          if (findterminalp(nextState, library) && findreward(opponent, nextState, library) == 100) {
+              opponentWins = true;
+              break;
+          }
+      }
+      if (opponentWins) {
+        break;
+      }
+      current_idx += 1;
+      if (current_idx == roles.length) {
+        current_idx = 0;
+      }
+    }
+    return opponentWins;
 }
 
 
@@ -135,6 +214,10 @@ function mcts(role, state, library, start_time){
     var score = 0;
     var action = root.children[0].action;
     for (var i = 0; i < root.children.length; i++){
+    if (check_bad_state(root.children[i].action, state, library, role)) {
+		console.log("Losing action... skipping");
+		continue;
+	}
 	var newscore = root.children[i].total_utility / root.children[i].num_visits;
 
 	// logging
