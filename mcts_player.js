@@ -32,11 +32,13 @@ var roles = seq();
 var roles2 = seq()
 var state = null;
 const padtime = 2500;
+var interstates = false;
 
 //------------------------------------------------------------------------------
 
-function info ()
- {return 'ready'}
+function info () {
+	return 'ready'
+}
 
 function start (id,r,rs,sc,pc)
  {matchid = id;
@@ -46,7 +48,44 @@ function start (id,r,rs,sc,pc)
   state = findinits(library);
   startclock = sc;
   playclock = pc;
+  starttime = Date.now();
+  interstates = false;
+  while (true) {
+  	const elapsed = Date.now() - starttime;
+    if (elapsed >= ((startclock * 1000) - padtime)) {
+	break;
+    }
+
+    dc = depthcharge(r, state, library, starttime);
+    if (dc !== 100 && dc !== 0 && dc !== 50) {
+    	console.log(dc);
+    	interstates = true;
+    }
+  }
+  console.log(interstates);
   return 'ready'}
+
+function depthcharge (role, state, library, starttime) {
+  
+    if (findterminalp(state,library)) {
+      //console.log("reward")
+      //console.log(findreward(role,state,library))
+      return parseInt(findreward(role,state,library))
+    };
+
+    const elapsed = Date.now() - starttime;
+    if (elapsed >= ((playclock * 1000) - padtime)) {
+	return 0;
+    }
+
+    var move = seq();
+    for (var i=0; i<roles.length; i++) {
+      var options = findlegals(roles[i],state,library);
+      move[i] = randomelement(options)
+    };
+    var newstate = simulate(move,state, library);
+    return depthcharge(role,newstate, library);
+}
 
 function play (id,move){
     const start_time = Date.now();
@@ -100,56 +139,15 @@ function bestmove(role, state, library, start_time){
     if (actions.length == 1){
 	return actions[0][2];
     }
-    var possible_actions = [];
-    if (roles.length > 1) {
-	    // iterate through all legal moves
-	    for (var i = 0; i < actions.length; i++) {
-	        var opponentState = simulate([actions[i]], state, library);
-
-	        var current_idx = 0;
-	        for (var j = 0; j < roles.length; j++) {
-	          if (role == roles[j]) {
-	            current_idx = j + 1;
-	            if (current_idx == roles.length) {
-	              current_idx = 0;
-	            }
-	            break;
-	          }
-	        }
-
-	        var opponentWins = false;
-	        while (roles[current_idx] != role) {
-	          var opponent = roles[current_idx];
-	          opponentMoves = findlegals(opponent, opponentState, library);
-	          for (var j = 0; j < opponentMoves.length; j++) {
-	              var nextState = simulate([opponentMoves[j]], opponentState, library); 
-	              if (findterminalp(nextState, library) && findreward(opponent, nextState, library) == 100) {
-	                  opponentWins = true;
-	                  break;
-	              }
-	          }
-	          if (opponentWins) {
-	            break;
-	          }
-	          current_idx += 1;
-	          if (current_idx == roles.length) {
-	            current_idx = 0;
-	          }
-	        }
-	        if (!opponentWins) {
-	          possible_actions.push(actions[i]);
-	        }
-	    }
-	} else {
-		possible_actions = actions;
-	}
     
     return mcts(role, state, library, start_time);
 }
 
 function check_bad_state(action, state, library, role) {
 	var opponentState = simulate([action], state, library);
-
+    if (findterminalp(opponentState, library) && findreward(role, opponentState, library) == 100) {
+      return 2;
+    }
     var current_idx = 0;
     for (var j = 0; j < roles.length; j++) {
       if (role == roles[j]) {
@@ -180,7 +178,11 @@ function check_bad_state(action, state, library, role) {
         current_idx = 0;
       }
     }
-    return opponentWins;
+    if (opponentWins) {
+    	return 1;
+    } else {
+    	return 0;
+    }
 }
 
 
@@ -213,10 +215,22 @@ function mcts(role, state, library, start_time){
     // choose highest average move or most visited (almost always will be the same)
     var score = 0;
     var action = root.children[0].action;
+    var j = 0;
+    while (j < root.children.length && check_bad_state(root.children[j].action, state, library, role) === 1) {
+    	j += 1;
+    }
+    if (j < root.children.length) {
+    	action = root.children[j].action;
+    }
     for (var i = 0; i < root.children.length; i++){
-    if (check_bad_state(root.children[i].action, state, library, role)) {
-		console.log("Losing action... skipping");
-		continue;
+    if (roles.length > 1) {
+	    const potential_bad = check_bad_state(root.children[i].action, state, library, role);
+	    if (potential_bad === 1) {
+			console.log("Losing action... skipping");
+			continue;
+		} else if (potential_bad === 2) {
+			return root.children[i].action[2];
+		}
 	}
 	var newscore = root.children[i].total_utility / root.children[i].num_visits;
 
@@ -308,7 +322,11 @@ function select(node, library){
 
 
 function selectfn(node){
-    return node.total_utility / node.num_visits + Math.sqrt(2 * Math.log(node.parent.num_visits) / node.num_visits);
+	C = 1.0;
+	if (!interstates || roles.length === 1) {
+		C = 100.0;
+	}
+    return node.total_utility / node.num_visits + C * Math.sqrt(2.0 * Math.log(node.parent.num_visits) / node.num_visits);
     //return Math.random(); // used for some debugging
     // could try other selectfn functions
 }
