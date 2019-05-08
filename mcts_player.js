@@ -322,8 +322,8 @@ function select(node, library){
 
 
 function selectfn(node){
-	C = 1.0;
-	if (!interstates || roles.length === 1) {
+	C = 5.0;
+	if (roles.length === 1) {
 		C = 100.0;
 	}
     return node.total_utility / node.num_visits + C * Math.sqrt(2.0 * Math.log(node.parent.num_visits) / node.num_visits);
