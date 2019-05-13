@@ -1,5 +1,5 @@
 //==============================================================================
-// mcs_player.js
+// mcts_opt_player.js
 //==============================================================================
 //------------------------------------------------------------------------------
 // Start-up:
@@ -14,6 +14,10 @@ var url = require("url");
 var querystring = require("querystring");
 var fs = require('fs');
 eval(fs.readFileSync('epilog.js') + '');
+eval(fs.readFileSync('complier.js') + '');
+// eval(fs.readFileSync('grounder.js') + '');
+// eval(fs.readFileSync('optimizer.js') + '');
+// eval(fs.readFileSync('winnow.js') + '');
 
 //==============================================================================
 // Player
@@ -43,30 +47,17 @@ function info () {
 function start (id,r,rs,sc,pc)
  {matchid = id;
   library = definemorerules(seq(),rs);
+  // library = definemorerules([],prunerules(library));
+  eval.call(null,compile(library));
   role = r;
   roles = findroles(library);
   state = findinits(library);
   startclock = sc;
   playclock = pc;
   starttime = Date.now();
-  interstates = false;
-  while (true) {
-  	const elapsed = Date.now() - starttime;
-    if (elapsed >= ((startclock * 1000) - padtime)) {
-	break;
-    }
-
-    dc = depthcharge(r, state, library, starttime);
-    if (dc !== 100 && dc !== 0 && dc !== 50) {
-    	console.log(dc);
-    	interstates = true;
-    }
-  }
-  console.log(interstates);
   return 'ready'}
 
 function depthcharge (role, state, library, starttime) {
-  
     if (findterminalp(state,library)) {
       //console.log("reward")
       //console.log(findreward(role,state,library))
@@ -81,6 +72,8 @@ function depthcharge (role, state, library, starttime) {
     var move = seq();
     for (var i=0; i<roles.length; i++) {
       var options = findlegals(roles[i],state,library);
+      console.log(options);
+      return 0;
       move[i] = randomelement(options)
     };
     var newstate = simulate(move,state, library);
@@ -507,12 +500,11 @@ function stop (id,move)
   {return 'done'}
 
 //==============================================================================
-// GGP basics
+// comp.js
 //==============================================================================
-
-indexing = true;
-dataindexing = false;
-ruleindexing = true;
+//==============================================================================
+// Basics
+//==============================================================================
 
 function findroles (rules)
  {return basefinds('R',seq('role','R'),seq(),rules)}
@@ -520,35 +512,35 @@ function findroles (rules)
 function findbases (rules)
  {return basefinds('P',seq('base','P'),seq(),rules)}
 
-function findinputs (role,rules)
- {return basefinds('A',seq('input',role,'A'),seq(),rules)}
+function findinputs (rules)
+ {return basefinds('A',seq('input','A'),seq(),rules)}
 
 function findinits (rules)
  {return basefinds(seq('true','P'),seq('init','P'),seq(),rules)}
 
-function findlegalp (role,ply,facts,rules)
- {return basefindp(seq('legal',role,ply),facts,rules)}
+function findlegalp (role,action,facts,rules)
+ {return $legal$bb$(role,action,facts,rules)[1]}
 
 function findlegalx (role,facts,rules)
- {return basefindx(seq('does',role,'X'),seq('legal',role,'X'),facts,rules)}
+ {return seq('does',role,$legal$bf$(role,facts,rules))}
 
 function findlegals (role,facts,rules)
- {return basefinds(seq('does',role,'X'),seq('legal',role,'X'),facts,rules)}
+ {return zniquify($$legal$bf$$(role,facts,rules)).map(x => seq('does',role,x))}
 
 function findnexts (facts,rules)
- {return basefinds(seq('true','P'),seq('next','P'),facts,rules).sort()}
+ {return vniquify($$next$f$$(facts,rules)).map(x => seq('true',x))}
 
 function findterminalp (facts,rules)
- {return basefindp('terminal',facts,rules)}
+ {return $terminal$$(facts,rules)}
 
 function findreward (role,facts,rules)
- {return basefindx('R',seq('goal',role,'R'),facts,rules)}
+ {return $goal$bf$(role,facts,rules)}
 
-function simulate (move,state,rules)
- {if (move==='nil') {return state};
-  return findnexts(move.concat(state),rules)}
 
 //------------------------------------------------------------------------------
+
+function simulate (move,state,rules)
+ {return findnexts(move.concat(state),rules)}
 
 function doesify (roles,actions)
  {var exp = seq();
@@ -573,6 +565,14 @@ function untruify (state)
   for (var i=0; i<state.length; i++)
       {exp[i] = state[i][1]};
   return exp}
+
+//==============================================================================
+// Epilog parameters
+//==============================================================================
+
+indexing = true;
+dataindexing = false;
+ruleindexing = true;
 
 //==============================================================================
 // Logic programming subroutines
