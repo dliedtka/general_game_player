@@ -37,6 +37,8 @@ var roles2 = seq()
 var state = null;
 const padtime = 2500;
 var interstates = false;
+var cache;
+var first_move = true;
 
 //------------------------------------------------------------------------------
 
@@ -55,7 +57,55 @@ function start (id,r,rs,sc,pc)
   startclock = sc;
   playclock = pc;
   starttime = Date.now();
+  roles2 = fix_roles(role);
+
+  const start_time = Date.now();
+  headstart(role, state, library, start_time);
+
   return 'ready'}
+
+
+function headstart(role, state, library, start_time){
+
+    // create game tree (node)
+    // start with first role
+    start_role_idx = 0;
+    
+    // a node has a state, role whose turn it is, parent node, a sequence of children nodes, num_vists, total_utility
+    if (first_move){
+	cache = generate_node(state, start_role_idx, "root", library, seq(), "init");
+	first_move = false;
+	var root = cache;
+    }
+    else{
+	advance_cache(state, library);
+	var root = cache;
+    }
+
+    // repeat until out of time
+    while((Date.now() - start_time) < (startclock * 1000 - padtime)){
+
+	// selection
+	current_node = select(root, library);
+
+	// expansion 
+	expand(current_node, library);
+
+	// simulation
+	var end_utility = simulation(role, library, current_node);
+
+	// backpropogation 
+	backpropagate(current_node, end_utility, true, role);
+
+    }
+    
+    // more logging
+    var elapsed = (Date.now() - start_time) / 1000;
+    console.log("" + root.num_visits + " games simulated in " + elapsed + " seconds; " + (root.num_visits/elapsed) + " simulations per second");
+    
+    return;
+}
+
 
 function depthcharge (role, state, library, starttime) {
     if (findterminalp(state,library)) {
@@ -130,6 +180,7 @@ function swap_back(move){
 function bestmove(role, state, library, start_time){
     var actions = findlegals(role, state, library);
     if (actions.length == 1){
+	advance_cache(state, library);
 	return actions[0][2];
     }
     
@@ -185,9 +236,17 @@ function mcts(role, state, library, start_time){
     // create game tree (node)
     // start with first role
     start_role_idx = 0;
-    
+
     // a node has a state, role whose turn it is, parent node, a sequence of children nodes, num_vists, total_utility
-    var root = generate_node(state, start_role_idx, "root", library, seq(), "init");
+    if (first_move){
+	cache = generate_node(state, start_role_idx, "root", library, seq(), "init");
+	first_move = false;
+	var root = cache;
+    }
+    else{
+	advance_cache(state, library);
+	var root = cache;
+    }
 
     // repeat until out of time
     while((Date.now() - start_time) < (playclock * 1000 - padtime)){
@@ -256,6 +315,27 @@ function find_next_role_idx(current_role_idx){
 	    }
 	}
     }
+}
+
+
+function advance_cache(current_state, library){
+
+    // get previous node
+    //var previous_state = cache.state;
+    var current_node = cache;
+
+    // randomly traverse until you get to current state
+    while (JSON.stringify(current_node.state) !== JSON.stringify(current_state)){
+	current_node = cache;
+	for (var i = 0; i < roles2.length; i++){
+	    current_node = randomelement(current_node.children);
+	}
+    }
+
+    // set current node to root
+    current_node.parent = "root";
+    // set cache to node associated with current state
+    cache = current_node;
 }
 
 
