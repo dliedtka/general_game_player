@@ -39,6 +39,7 @@ const padtime = 2500;
 var interstates = false;
 var cache;
 var first_move = true;
+var tree = {};
 
 //------------------------------------------------------------------------------
 
@@ -58,6 +59,8 @@ function start (id,r,rs,sc,pc)
   playclock = pc;
   starttime = Date.now();
   roles2 = fix_roles(role);
+  tree = {};
+  first_move = true;
 
   const start_time = Date.now();
   headstart(role, state, library, start_time);
@@ -70,20 +73,21 @@ function headstart(role, state, library, start_time){
     // create game tree (node)
     // start with first role
     start_role_idx = 0;
-    
+    var clock = playclock;
     // a node has a state, role whose turn it is, parent node, a sequence of children nodes, num_vists, total_utility
     if (first_move){
-	cache = generate_node(state, start_role_idx, "root", library, seq(), "init");
-	first_move = false;
-	var root = cache;
+    	cache = generate_node(state, start_role_idx, "root", library, seq(), "init");
+    	first_move = false;
+    	var root = cache;
+      clock = startclock;
     }
     else{
-	advance_cache(state, library);
-	var root = cache;
+    	advance_cache(role, state, library);
+    	var root = cache;
     }
 
     // repeat until out of time
-    while((Date.now() - start_time) < (startclock * 1000 - padtime)){
+    while((Date.now() - start_time) < (clock * 1000 - padtime)){
 
 	// selection
 	current_node = select(root, library);
@@ -180,8 +184,8 @@ function swap_back(move){
 function bestmove(role, state, library, start_time){
     var actions = findlegals(role, state, library);
     if (actions.length == 1){
-	advance_cache(state, library);
-	return actions[0][2];
+    	headstart(role, state, library, start_time);
+    	return actions[0][2];
     }
     
     return mcts(role, state, library, start_time);
@@ -238,15 +242,8 @@ function mcts(role, state, library, start_time){
     start_role_idx = 0;
 
     // a node has a state, role whose turn it is, parent node, a sequence of children nodes, num_vists, total_utility
-    if (first_move){
-	cache = generate_node(state, start_role_idx, "root", library, seq(), "init");
-	first_move = false;
+	advance_cache(role, state, library);
 	var root = cache;
-    }
-    else{
-	advance_cache(state, library);
-	var root = cache;
-    }
 
     // repeat until out of time
     while((Date.now() - start_time) < (playclock * 1000 - padtime)){
@@ -318,24 +315,26 @@ function find_next_role_idx(current_role_idx){
 }
 
 
-function advance_cache(current_state, library){
+function advance_cache(role, current_state, library){
 
+    tree[JSON.stringify([role, current_state])].parent = "root";
+    cache = tree[JSON.stringify([role, current_state])];
     // get previous node
     //var previous_state = cache.state;
-    var current_node = cache;
+ //    var current_node = cache;
 
-    // randomly traverse until you get to current state
-    while (JSON.stringify(current_node.state) !== JSON.stringify(current_state)){
-	current_node = cache;
-	for (var i = 0; i < roles2.length; i++){
-	    current_node = randomelement(current_node.children);
-	}
-    }
+ //    // randomly traverse until you get to current state
+ //    while (JSON.stringify(current_node.state) !== JSON.stringify(current_state)){
+	// current_node = cache;
+	// for (var i = 0; i < roles2.length; i++){
+	//     current_node = randomelement(current_node.children);
+	// }
+ //    }
 
-    // set current node to root
-    current_node.parent = "root";
-    // set cache to node associated with current state
-    cache = current_node;
+ //    // set current node to root
+ //    current_node.parent = "root";
+ //    // set cache to node associated with current state
+ //    cache = current_node;
 }
 
 
@@ -357,7 +356,7 @@ function generate_node(state, current_role_idx, parent, library, move, last_acti
     node["total_utility"] = 0;
     node["move"] = move; // sequence that will be the next move (every role must make a move, simulate to new state after roles2.length nodes)
     node["action"] = last_action; // action from parent node that led to this node
-
+    tree[JSON.stringify([roles2[current_role_idx], state])] = node;
     return node;
 }
 
