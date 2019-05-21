@@ -29,16 +29,18 @@ var startclock = 0;
 var playclock = 0;
 
 var roles = seq();
-//var roles2 = seq()
 var state = null;
 const padtime = 2500; // TODO: decrease to one sec?
+var cache = {};
+var first_run = true;
+var nomove_mcts = false;
 
 //------------------------------------------------------------------------------
 
 function info ()
  {return 'ready'}
 
-function start (id,r,rs,sc,pc) // TODO: cache
+function start (id,r,rs,sc,pc) // TODO: headstart
  {matchid = id;
   library = definemorerules(seq(),rs);
   role = r;
@@ -46,12 +48,23 @@ function start (id,r,rs,sc,pc) // TODO: cache
   state = findinits(library);
   startclock = sc;
   playclock = pc;
+
+  const start_time = Date.now();
+  headstart(role, state, library, start_time);
+
   return 'ready'}
+
+
+function headstart(role, state, library, start_time){
+    nomove_mcts = true;
+    mcts(role, state, library, start_time);
+    nomove_mcts = false;
+}
+
 
 function play (id,move){
     const start_time = Date.now();
     if (move!=='nil') {state = simulate(doesify(roles,move),state,library)};
-    //roles2 = fix_roles(role);
     return bestmove(role, state, library, start_time);
 }
 
@@ -64,8 +77,13 @@ function randomelement(arr) {
 
 // best move
 function bestmove(role, state, library, start_time){
+    // TODO: advance cache
+
     var actions = findlegals(role, state, library);
     if (actions.length == 1){
+	nomove_mcts = true;
+	mcts(role, state, library, start_time);
+	nomove_mcts = false;
 	return actions[0][2]; // TODO: run mcts until run out of time
     }
     
@@ -82,23 +100,26 @@ function mcts(role, state, library, start_time){
     }
 
 
-    // TODO: advance cache
+    // TODO: advance cache, first visit should generate node
     // create game tree (node), idea 3 so one node for each state
     // a node has a state, parent node, a sequence of children nodes, num_vists, total_utility for each role
-    var root = generate_node(state, "root", "init", library);
+    //var root = generate_node(state, "root", "init", library);
+    // first run only 
+    if (first_run){
+	generate_node(state, "root", "init", library);
+	first_run = false;
+    }
+    //console.log("in function: " + cache[node.state].state);
+    //console.log(cache[node.state].total_utility);
+    //console.log(cache[node.state].num_visits);
+    var root = cache[state];
     var start_visits = root.num_visits;
     
     var counter = 0;
     // repeat until out of time
     while((Date.now() - start_time) < (playclock * 1000 - padtime)){
 
-	/*if (counter > 3){
-	    console.log("root " + root.state + " " + root.total_utility)
-
-	    throw "check it out";
-	    }*/
 	// selection
-	//console.log("calling select");
 	current_node = select(root, library, role_idx);
 
 	// expansion 
@@ -111,19 +132,32 @@ function mcts(role, state, library, start_time){
 	backpropagate(current_node, end_reward, true, library);
     }
 
-    // choose highest average move or most visited (almost always will be the same), no minimax assumption
-    var action = best_action(root, role_idx, library, true);
+    if (!nomove_mcts){
+	// choose highest average move or most visited (almost always will be the same), no minimax assumption
+	var action = best_action(root, role_idx, library, true);
+    }
 
     // more logging
     var elapsed = (Date.now() - start_time) / 1000;
     console.log("" + (root.num_visits - start_visits) + " games simulated in " + elapsed + " seconds; " + ((root.num_visits - start_visits)/elapsed) + " simulations per second");
     
-    return action[2];
+    if (nomove_mcts){
+	return;
+    }
+    else{
+	return action[2];
+    }
 }
 
 
 // a node has a state, parent node, a sequence of children nodes, num_vists, total_utility for each role; no move that led to state so we can combine identical states in cache
 function generate_node(state, parent, library){
+    
+    // if state already in keyspace of cache, return
+    if (state in cache){
+	return;
+    }
+
     var node = {};
 
     node["state"] = state;
@@ -144,7 +178,9 @@ function generate_node(state, parent, library){
 	node.total_utility[i] = 0;
     }
 
-    return node;
+    cache[node.state] = node;
+    
+    return;
 }
 
 
@@ -198,8 +234,10 @@ function expand(node, library){
 
     for (var i = 0; i < moves.length; i++){
 	var newstate = simulate(moves[i], node.state, library);
-	var newnode = generate_node(newstate, node, library);
-	node.children[node.children.length] = newnode;
+	//var newnode = generate_node(newstate, node, library);
+	//node.children[node.children.length] = newnode;
+	generate_node(newstate, node, library);
+	node.children[node.children.length] = cache[newstate];
     }
 
     return true;
