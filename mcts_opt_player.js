@@ -244,6 +244,8 @@ function mcts(role, state, library, start_time){
     // a node has a state, role whose turn it is, parent node, a sequence of children nodes, num_vists, total_utility
 	advance_cache(role, state, library);
 	var root = cache;
+  var startvisits = root.num_visits;
+  var counter = 0;
 
     // repeat until out of time
     while((Date.now() - start_time) < (playclock * 1000 - padtime)){
@@ -259,8 +261,10 @@ function mcts(role, state, library, start_time){
 
 	// backpropogation 
 	backpropagate(current_node, end_utility, true, role);
+  counter += 1;
     }
 
+    console.log(counter);
     // choose highest average move or most visited (almost always will be the same)
     var score = 0;
     var action = root.children[0].action;
@@ -294,7 +298,7 @@ function mcts(role, state, library, start_time){
 
     // more logging
     var elapsed = (Date.now() - start_time) / 1000;
-    console.log("" + root.num_visits + " games simulated in " + elapsed + " seconds; " + (root.num_visits/elapsed) + " simulations per second");
+    console.log("" + root.num_visits - startvisits + " games simulated in " + elapsed + " seconds; " + ((root.num_visits - startvisits)/elapsed) + " simulations per second");
     console.log("current projected utility: " + score);
 
     return action[2];
@@ -442,7 +446,6 @@ function simulation(role, library, node){
 
     var newstate = node.state;
     while (!findterminalp(newstate,library)){
-
 	// for debugging simulation of games
 	//if (first_loop){
 	//    console.log("\nsimulating");

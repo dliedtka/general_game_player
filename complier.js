@@ -659,7 +659,7 @@ function programoneviewsubgoal (rule,n,blist,out)
 function programoneviewsubatom (rule,n,blist,out)
  {if (rule[n]==='true') {return programoneviewsubgoals(rule,n+1,blist,out)};
   if (rule[n]==='false') {return 'false'};
-  var subroutine = single(rule[n]);
+  var subroutine = specialn(rule[n],0);
   var cond = seq(subroutine,'facts','rules');
   return seq('if',cond,programoneviewsubgoals(rule,n+1,blist,out))}
 
@@ -893,93 +893,6 @@ function programcalldb (subgoal,blist)
   return seq(subroutine,query,seq('seq'),'facts','rules')}
 
 //------------------------------------------------------------------------------
-// programoneatom cases
-//------------------------------------------------------------------------------
-
-function programoneatombound (rel,rules)
- {var arity = getfactarity(rel,rules);
-  var dataset = static(rel);
-  var subroutine = '$' + rel + '$' + makesequence('b',arity) + '$';
-  var params = [];
-  for (var i=0; i<arity; i++) {params.push('x' + (i+1))};
-  var code = seq('block');
-  code.push(seq('bind','data',seq('baseindexees',kwotify(rel),dataset)));
-  for (var i=0; i<arity; i++)
-      {code.push(seq('bind','dum',seq('baseindexps',params[i],dataset)));
-  var cond = seq('and','dum',seq('less','dum.length','data.length'));
-  code.push(seq('if',cond,seq('block',seq('bind','data','dum'))))};
-  var cond = [];
-  for (var i=0; i<arity; i++)
-      {cond.push(seq('equalp',seq('sub',seq('sub','data','i'),i+1),params[i]))};
-  cond = programands(cond);
-  var inner = seq('if',cond,seq('return','true'));
-  code.push(seq('loop','i','0','data.length',inner));
-  code.push(seq('return','false'));
-  return seq('function',subroutine,params,code)}
-
-//------------------------------------------------------------------------------
-
-function programoneatomf (rel,rules)
- {var dataset = static(rel);
-  var subroutine = special(rel,'f');
-  var params = seq('facts','rules');
-  var code = seq('function',subroutine,params);
-  code.push(seq('bind','data',seq('baseindexees',kwotify(rel),dataset)));
-  var cond = seq('greater','data.length','0');
-  code.push(seq('if',cond,seq('return',seq('sub',seq('sub','data','0'),'1'))));
-  code.push(seq('return','false'));
-  return code}
-
-//------------------------------------------------------------------------------
-
-function programoneatombf (rel,rules)
- {var dataset = static(rel);
-  var subroutine = special(rel,'bf');
-  var params = seq('x1','facts','rules');
-  var code = seq('function',subroutine,params);
-  code.push(seq('bind','data',seq('baseindexees',kwotify(rel),dataset)));
-  code.push(seq('bind','dum',seq('baseindexps','x1',dataset)));
-  var cond = seq('and','dum',seq('less','dum.length','data.length'));
-  code.push(seq('if',cond,seq('block',seq('bind','data','dum'))));
-  var cond =  seq('equalp',seq('sub',seq('sub','data','i'),'1'),'x1');
-  var result = seq('sub',seq('sub','data','i'),'2');
-  var subcode = seq('if',cond,seq('return',result));
-  code.push(seq('loop','i','0','data.length',subcode));
-  code.push(seq('return','false'));
-  return code}
-
-//------------------------------------------------------------------------------
-
-function programoneatomfb (rel,rules)
- {var dataset = static(rel);
-  var subroutine = special(rel,'fb');
-  var params = seq('x2','facts','rules');
-  var code = seq('function',subroutine,params);
-  code.push(seq('bind','data',seq('baseindexees',kwotify(rel),dataset)));
-  code.push(seq('bind','dum',seq('baseindexps','x2','facts')));
-  var cond = seq('and','dum',seq('less','dum.length','data.length'));
-  var cond =  seq('equalp',seq('sub',seq('sub','data','i'),'2'),'x2');
-  var result = seq('sub',seq('sub','data','i'),'1');
-  var subcode = seq('if',cond,seq('return',result));
-  code.push(seq('loop','i','0','data.length',subcode));
-  code.push(seq('return','false'));
-  return code}
-
-//------------------------------------------------------------------------------
-
-function programoneatomfree (rel,rules)
- {var arity = getrulearity(rel,rules);
-  var dataset = static(rel);
-  var subroutine = special(rel,makesequence('f',arity));
-  var params = seq('facts','rules');
-  var code = seq('function',subroutine,params);
-  code.push(seq('bind','data',seq('baseindexees',kwotify(rel),dataset)));
-  var cond = seq('greater','data.length','0');
-  code.push(seq('if',cond,seq('return',seq('sub','data','0'))));
-  code.push(seq('return','false'))
-  return code}
-
-//------------------------------------------------------------------------------
 // programallview cases
 //------------------------------------------------------------------------------
 
@@ -1075,7 +988,7 @@ function programallviewsubgoal (rule,n,blist,out)
 function programallviewsubatom (rule,n,blist,out)
  {if (rule[n]==='true') {return programallviewsubgoals(rule,n+1,blist,out)};
   if (rule[n]==='false') {return 'false'};
-  var subroutine = single(rule[n]);
+  var subroutine = specialn(rule[n],0);
   var cond = seq(subroutine,'facts','rules');
   return seq('if',cond,programallviewsubgoals(rule,n+1,blist,out))}
 
@@ -1243,6 +1156,93 @@ function programcallsffb (subgoal,blist)
 function programcallsff (subgoal,blist)
  {var subroutine = '$$' + operator(subgoal) + '$ff$$';
   return seq(subroutine,'facts','rules')}
+
+//------------------------------------------------------------------------------
+// programoneatom cases
+//------------------------------------------------------------------------------
+
+function programoneatombound (rel,rules)
+ {var arity = getfactarity(rel,rules);
+  var dataset = static(rel);
+  var subroutine = '$' + rel + '$' + makesequence('b',arity) + '$';
+  var params = [];
+  for (var i=0; i<arity; i++) {params.push('x' + (i+1))};
+  var code = seq('block');
+  code.push(seq('bind','data',seq('baseindexees',kwotify(rel),dataset)));
+  for (var i=0; i<arity; i++)
+      {code.push(seq('bind','dum',seq('baseindexps',params[i],dataset)));
+  var cond = seq('and','dum',seq('less','dum.length','data.length'));
+  code.push(seq('if',cond,seq('block',seq('bind','data','dum'))))};
+  var cond = [];
+  for (var i=0; i<arity; i++)
+      {cond.push(seq('equalp',seq('sub',seq('sub','data','i'),i+1),params[i]))};
+  cond = programands(cond);
+  var inner = seq('if',cond,seq('return','true'));
+  code.push(seq('loop','i','0','data.length',inner));
+  code.push(seq('return','false'));
+  return seq('function',subroutine,params,code)}
+
+//------------------------------------------------------------------------------
+
+function programoneatomf (rel,rules)
+ {var dataset = static(rel);
+  var subroutine = special(rel,'f');
+  var params = seq('facts','rules');
+  var code = seq('function',subroutine,params);
+  code.push(seq('bind','data',seq('baseindexees',kwotify(rel),dataset)));
+  var cond = seq('greater','data.length','0');
+  code.push(seq('if',cond,seq('return',seq('sub',seq('sub','data','0'),'1'))));
+  code.push(seq('return','false'));
+  return code}
+
+//------------------------------------------------------------------------------
+
+function programoneatombf (rel,rules)
+ {var dataset = static(rel);
+  var subroutine = special(rel,'bf');
+  var params = seq('x1','facts','rules');
+  var code = seq('function',subroutine,params);
+  code.push(seq('bind','data',seq('baseindexees',kwotify(rel),dataset)));
+  code.push(seq('bind','dum',seq('baseindexps','x1',dataset)));
+  var cond = seq('and','dum',seq('less','dum.length','data.length'));
+  code.push(seq('if',cond,seq('block',seq('bind','data','dum'))));
+  var cond =  seq('equalp',seq('sub',seq('sub','data','i'),'1'),'x1');
+  var result = seq('sub',seq('sub','data','i'),'2');
+  var subcode = seq('if',cond,seq('return',result));
+  code.push(seq('loop','i','0','data.length',subcode));
+  code.push(seq('return','false'));
+  return code}
+
+//------------------------------------------------------------------------------
+
+function programoneatomfb (rel,rules)
+ {var dataset = static(rel);
+  var subroutine = special(rel,'fb');
+  var params = seq('x2','facts','rules');
+  var code = seq('function',subroutine,params);
+  code.push(seq('bind','data',seq('baseindexees',kwotify(rel),dataset)));
+  code.push(seq('bind','dum',seq('baseindexps','x2','facts')));
+  var cond = seq('and','dum',seq('less','dum.length','data.length'));
+  var cond =  seq('equalp',seq('sub',seq('sub','data','i'),'2'),'x2');
+  var result = seq('sub',seq('sub','data','i'),'1');
+  var subcode = seq('if',cond,seq('return',result));
+  code.push(seq('loop','i','0','data.length',subcode));
+  code.push(seq('return','false'));
+  return code}
+
+//------------------------------------------------------------------------------
+
+function programoneatomfree (rel,rules)
+ {var arity = getrulearity(rel,rules);
+  var dataset = static(rel);
+  var subroutine = special(rel,makesequence('f',arity));
+  var params = seq('facts','rules');
+  var code = seq('function',subroutine,params);
+  code.push(seq('bind','data',seq('baseindexees',kwotify(rel),dataset)));
+  var cond = seq('greater','data.length','0');
+  code.push(seq('if',cond,seq('return',seq('sub','data','0'))));
+  code.push(seq('return','false'))
+  return code}
 
 //------------------------------------------------------------------------------
 // programallatomlist cases
