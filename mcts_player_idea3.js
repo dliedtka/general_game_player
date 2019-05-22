@@ -34,6 +34,8 @@ const padtime = 2500; // TODO: decrease to one sec?
 var cache = {};
 var first_run = true;
 var nomove_mcts = false;
+var states_visited;
+var clock;
 
 //------------------------------------------------------------------------------
 
@@ -49,6 +51,7 @@ function start (id,r,rs,sc,pc) // TODO: headstart
   startclock = sc;
   playclock = pc;
 
+  clock = startclock;
   const start_time = Date.now();
   headstart(role, state, library, start_time);
 
@@ -63,6 +66,7 @@ function headstart(role, state, library, start_time){
 
 
 function play (id,move){
+    clock = playclock;
     const start_time = Date.now();
     if (move!=='nil') {state = simulate(doesify(roles,move),state,library)};
     return bestmove(role, state, library, start_time);
@@ -106,18 +110,20 @@ function mcts(role, state, library, start_time){
     //var root = generate_node(state, "root", "init", library);
     // first run only 
     if (first_run){
-	generate_node(state, "root", "init", library);
+	generate_node(state, library);
 	first_run = false;
     }
     //console.log("in function: " + cache[node.state].state);
     //console.log(cache[node.state].total_utility);
     //console.log(cache[node.state].num_visits);
     var root = cache[state];
+    states_visited = seq();
+    states_visited[states_visited.length] = state;
     var start_visits = root.num_visits;
     
     var counter = 0;
     // repeat until out of time
-    while((Date.now() - start_time) < (playclock * 1000 - padtime)){
+    while((Date.now() - start_time) < (clock * 1000 - padtime)){
 
 	// selection
 	current_node = select(root, library, role_idx);
@@ -129,12 +135,12 @@ function mcts(role, state, library, start_time){
 	var end_reward = simulation(role, library, current_node);
 
 	// backpropogation 
-	backpropagate(current_node, end_reward, true, library);
+	backpropagate(states_visited, end_reward);
     }
 
     if (!nomove_mcts){
 	// choose highest average move or most visited (almost always will be the same), no minimax assumption
-	var action = best_action(root, role_idx, library, true);
+	var action = best_action(root, role_idx, library);
     }
 
     // more logging
@@ -151,7 +157,7 @@ function mcts(role, state, library, start_time){
 
 
 // a node has a state, parent node, a sequence of children nodes, num_vists, total_utility for each role; no move that led to state so we can combine identical states in cache
-function generate_node(state, parent, library){
+function generate_node(state, library){
     
     // if state already in keyspace of cache, return
     if (state in cache){
@@ -161,8 +167,6 @@ function generate_node(state, parent, library){
     var node = {};
 
     node["state"] = state;
-
-    node["parent"] = parent;
 
     if (findterminalp(state, library)){
 	node["children"] = "terminal";
@@ -185,9 +189,11 @@ function generate_node(state, parent, library){
 
 
 function select(node, library, role_idx){
+    
     if (node.num_visits == 0){
 	return node;
     }
+
     
     // no children to explore (reached a leaf of game tree)
     if (node.children === "terminal"){
@@ -196,6 +202,7 @@ function select(node, library, role_idx){
 
     for (var i = 0; i < node.children.length; i++){
 	if (node.children[i].num_visits == 0){
+	    states_visited[states_visited.length] = node.children[i].state;
 	    return node.children[i];
 	}
     }
@@ -204,19 +211,20 @@ function select(node, library, role_idx){
     var result = node;
     
     for (var i = 0; i < node.children.length; i++){
-	var newscore = selectfn(node.children[i], role_idx);
+	var newscore = selectfn(node.children[i], role_idx, node);
 	if (newscore > score){
 	    score = newscore; 
 	    result = node.children[i];
 	}
     }
 
+    states_visited[states_visited.length] = result.state;
     return select(result, library, role_idx);
 }
 
 
-function selectfn(node, role_idx){
-    return node.total_utility[role_idx] / node.num_visits + Math.sqrt(40 * Math.log(node.parent.num_visits) / node.num_visits);
+function selectfn(node, role_idx, parent_node){
+    return node.total_utility[role_idx] / node.num_visits + Math.sqrt(40 * Math.log(parent_node.num_visits) / node.num_visits);
     //return Math.random(); // used for some debugging
     // could try other selectfn functions
 }
@@ -236,7 +244,7 @@ function expand(node, library){
 	var newstate = simulate(moves[i], node.state, library);
 	//var newnode = generate_node(newstate, node, library);
 	//node.children[node.children.length] = newnode;
-	generate_node(newstate, node, library);
+	generate_node(newstate, library);
 	node.children[node.children.length] = cache[newstate];
     }
 
@@ -308,51 +316,23 @@ function simulation(role, library, node){ // TODO: might not need role, return u
 }
 
 
-function backpropagate(node, scores, first_call, library){
+function backpropagate(states_visited, scores){
 
-    node.num_visits++;
+    for (var i = 0; i < states_visited.length; i++){
+	var node = cache[states_visited[i]];
 
-    // for "result" node we just add achieved score
-    if (first_call){
-	for (var i = 0; i < roles.length; i++){
-	    node.total_utility[i] += scores[i];
-	}
-    }
-
-    else{
-	// find the action that maximizes utility for each role
-	var best_move = seq();
-	for (var i = 0; i < roles.length; i++){
-	    best_move[i] = best_action(node, i, library, false);
+	for (var j = 0; j < roles.length; j++){
+	    node.total_utility[j] += scores[j];
 	}
 
-	var best_state = simulate(best_move, node.state, library);
-
-	// find the child that matches the best state
-
-	for (var i = 0; i < node.children.length; i++){
-	    if (JSON.stringify(best_state) == JSON.stringify(node.children[i].state)){
-		if (node.children[i].num_visits > 0){
-		    for (var j = 0; j < roles.length; j++){
-			node.total_utility[j] += node.children[i].total_utility[j] / node.children[i].num_visits;
-		    }
-		}
-		else{
-		    console.log("should probably pick a random visited node")
-		}
-	    }
-	}
-    }
-
-    if (node.parent !== "root"){
-	backpropagate(node.parent, scores, false, library);
+	node.num_visits++;
     }
 
     return true;
 }
 
 
-function best_action(node, role_idx, library, verbose){
+function best_action(node, role_idx, library){
     var actions = findlegals(roles[role_idx], node.state, library);
 
     if (actions.length === 1){
@@ -360,6 +340,9 @@ function best_action(node, role_idx, library, verbose){
     }
 
     else{
+	
+
+	
 	// iterate through actions
 	var score = 0;
 	var action = actions[0];
@@ -400,9 +383,7 @@ function best_action(node, role_idx, library, verbose){
 	    }
 	    
 	    // logging
-	    if (verbose){
-		console.log("action: " + actions[i] + " utility: " + tempscore + " numvisits: " + counter + " score: " + newscore);
-	    }
+	    console.log("action: " + actions[i] + " utility: " + tempscore + " numvisits: " + counter + " score: " + newscore);
 
 	    if (newscore > score){
 		score = newscore;
@@ -411,9 +392,9 @@ function best_action(node, role_idx, library, verbose){
 	}
 
 	return action;
+	
     }
 }
-
   
 function abort (id)
   {return 'done'}
