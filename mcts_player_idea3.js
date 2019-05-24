@@ -563,6 +563,9 @@ function select(node, library, role_idx) {
 
 function selectfn(node, role_idx, parent_node) {
   var C = 50.0;
+  if (roles.length === 1 || (!turnbased && !is_coop)) {
+    C = 150.0;
+  }
   return node.total_utility[role_idx] / node.num_visits + C * Math.sqrt(Math.log(parent_node.num_visits) / node.num_visits);
   //return Math.random(); // used for some debugging
   // could try other selectfn functions
