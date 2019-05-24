@@ -30,7 +30,7 @@ var playclock = 0;
 
 var roles = seq();
 var state = null;
-const padtime = 2500; // TODO: decrease to one sec?
+const padtime = 1000; // TODO: decrease to one sec?
 var cache = {};
 var first_run = true;
 var nomove_mcts = false;
@@ -51,6 +51,7 @@ function start(id, r, rs, sc, pc) // TODO: headstart
 {
   cache = {};
   first_run = true;
+  use_heuristics = false;
   matchid = id;
   library = definemorerules(seq(), rs);
   role = r;
@@ -86,7 +87,7 @@ function start(id, r, rs, sc, pc) // TODO: headstart
 
   const count_over_time = 1.0 * count / 1.5;
   console.log(count_over_time);
-  if (count_over_time < 10) {
+  if (count_over_time < 5) {
     use_heuristics = true;
   }
 
@@ -391,11 +392,18 @@ function parse_state(state) {
 }
 
 // monte carlo tree search
-function mcts(role, state, library, start_time) {
+function mcts(curr_role, state, library, start_time) {
 
   var role_idx = 0;
-  while (roles[role_idx] !== role) {
-    role_idx++;
+  if (turnbased) {
+    while (findlegals(roles[role_idx], state, library).length === 1) {
+      role_idx++;
+    }
+    curr_role = roles[role_idx];
+  } else {
+    while (roles[role_idx] !== curr_role) {
+      role_idx++;
+    }
   }
 
 
@@ -431,7 +439,7 @@ function mcts(role, state, library, start_time) {
     expand(current_node, library);
 
     // simulation
-    var end_reward = simulation(role, library, current_node);
+    var end_reward = simulation(curr_role, library, current_node);
 
     // backpropogation 
     backpropagate(states_visited, end_reward);
@@ -460,7 +468,7 @@ function mcts(role, state, library, start_time) {
 function generate_node(state, library) {
 
   // if state already in keyspace of cache, return
-  if (state in cache || parse_state(state) in cache) {
+  if (state in cache || (!turnbased && !is_coop && parse_state(state) in cache)) {
     return;
   }
 
@@ -506,28 +514,30 @@ function is_turnbased(state, library) {
 
 
 function select(node, library, role_idx) {
-
   if (node.num_visits == 0) {
     return node;
   }
-  // console.log(node);
 
   // no children to explore (reached a leaf of game tree)
   if (node.children == "terminal") {
     return node;
   }
 
-  for (var i = 0; i < node.children.length; i++) {
-    if (node.children[i].num_visits == 0) {
-      states_visited[states_visited.length] = node.children[i].state;
-      return node.children[i];
-    }
-  }
+  // if (turnbased) {
+  //   role_idx = 0;
+  //   while (findlegals(roles[role_idx], node.state, library).length === 1) {
+  //     role_idx++;
+  //   }
+  // }
 
   var score = 0;
   var result = node.children[0];
 
   for (var i = 0; i < node.children.length; i++) {
+    if (node.children[i].num_visits == 0) {
+      states_visited[states_visited.length] = node.children[i].state;
+      return node.children[i];
+    }
     var newscore = selectfn(node.children[i], role_idx, node);
     if (newscore > score) {
       score = newscore;
@@ -541,6 +551,9 @@ function select(node, library, role_idx) {
     if (new_role_idx == roles.length) {
       new_role_idx = 0;
     }
+    // if (findlegals(roles[new_role_idx], result.state, library).length === 1) {
+    //   new_role_idx = role_idx;
+    // }
   }
 
   states_visited[states_visited.length] = result.state;
@@ -550,9 +563,6 @@ function select(node, library, role_idx) {
 
 function selectfn(node, role_idx, parent_node) {
   var C = 50.0;
-  if (roles.length === 1 || (!turnbased && !is_coop)) {
-    C = 100.0;
-  }
   return node.total_utility[role_idx] / node.num_visits + C * Math.sqrt(Math.log(parent_node.num_visits) / node.num_visits);
   //return Math.random(); // used for some debugging
   // could try other selectfn functions
@@ -563,7 +573,7 @@ function expand(node, library) {
 
   // auto return an end state (no states left to add to game tree)
   if (node.children === "terminal") {
-    return true;
+    return;
   }
 
   // generate all possible move combinations
@@ -580,8 +590,6 @@ function expand(node, library) {
       node.children[node.children.length] = cache[newstate];
     }
   }
-
-  return true;
 }
 
 
@@ -595,7 +603,7 @@ function generate_moves_helper(state, library, current_role_idx, moves, move) {
   // end case
   if (current_role_idx == roles.length) {
     moves[moves.length] = move.slice();
-    return true;
+    return;
   }
 
   var current_role = roles[current_role_idx];
@@ -677,8 +685,6 @@ function backpropagate(states_visited, scores) {
 
     node.num_visits++;
   }
-
-  return true;
 }
 
 function check_bad_state(action, state, library, role) {
@@ -733,70 +739,73 @@ function best_action(node, role_idx, library) {
 
 
     // iterate through actions
+    // var z = 0;
+    var possible_moves = generate_moves(node.state, library);
+    // while (z < actions.length && check_bad_state(actions[z], state, library, role) === 1) {
+    //   z += 1;
+    // }
+    // if (z < actions.length) {
+    //   action = actions[z];
+    // }
+    // for (var i = 0; i < actions.length; i++) {
+    //   var tempscore = 0;
+    //   var counter = 0;
+    //   if (roles.length > 1) {
+    //     const potential_bad = check_bad_state(actions[i], state, library, role);
+    //     if (potential_bad === 1) {
+    //       console.log("Losing action... skipping");
+    //       continue;
+    //     } else if (potential_bad === 2) {
+    //       return actions[i];
+    //     }
+    //   }
+
+    //   // create list of all possible newstates with that action
+    //   var possible_moves = generate_moves(node.state, library);
+
+    //   var action_moves = seq();
+    //   for (var k = 0; k < possible_moves.length; k++) {
+    //     if (JSON.stringify(possible_moves[k][role_idx]) == JSON.stringify(actions[i])) {
+    //       action_moves[action_moves.length] = possible_moves[k];
+    //     }
+    //   }
+
+    //   var newstates = seq();
+    //   for (var k = 0; k < action_moves.length; k++) {
+    //     newstates[k] = JSON.stringify(simulate(action_moves[k], node.state, library));
+    //   }
+
+    //   // check if each child state is in new states
+    //   for (var j = 0; j < node.children.length; j++) {
+
+    //     if (newstates.indexOf(JSON.stringify(node.children[j].state)) > -1 && node.children[j].num_visits > 0) {
+
+    //       tempscore += node.children[j].total_utility[role_idx];
+    //       counter += node.children[j].num_visits;
+    //     }
+    //   }
+
+    //   if (counter == 0) {
+    //     var newscore = 0;
+    //   } else {
+    //     var newscore = tempscore / counter;
+    //   }
     var score = 0;
     var action = actions[0];
-    var z = 0;
-    while (z < actions.length && check_bad_state(actions[z], state, library, role) === 1) {
-      z += 1;
-    }
-    if (z < actions.length) {
-      action = actions[z];
-    }
-    for (var i = 0; i < actions.length; i++) {
-      var tempscore = 0;
-      var counter = 0;
-      if (roles.length > 1) {
-        const potential_bad = check_bad_state(actions[i], state, library, role);
-        if (potential_bad === 1) {
-          console.log("Losing action... skipping");
-          continue;
-        } else if (potential_bad === 2) {
-          return actions[i];
-        }
-      }
-
-      // create list of all possible newstates with that action
-      var possible_moves = generate_moves(node.state, library);
-
-      var action_moves = seq();
-      for (var k = 0; k < possible_moves.length; k++) {
-        if (JSON.stringify(possible_moves[k][role_idx]) == JSON.stringify(actions[i])) {
-          action_moves[action_moves.length] = possible_moves[k];
-        }
-      }
-
-      var newstates = seq();
-      for (var k = 0; k < action_moves.length; k++) {
-        newstates[k] = JSON.stringify(simulate(action_moves[k], node.state, library));
-      }
-
-      // check if each child state is in new states
-      for (var j = 0; j < node.children.length; j++) {
-
-        if (newstates.indexOf(JSON.stringify(node.children[j].state)) > -1 && node.children[j].num_visits > 0) {
-
-          tempscore += node.children[j].total_utility[role_idx];
-          counter += node.children[j].num_visits;
-        }
-      }
-
-      if (counter == 0) {
-        var newscore = 0;
-      } else {
-        var newscore = tempscore / counter;
-      }
-
+    for (var i = 0; i < possible_moves.length; i++) {
       // logging
-      console.log("action: " + actions[i] + " utility: " + tempscore + " numvisits: " + counter + " score: " + newscore);
-
+      var currstate = simulate(possible_moves[i], node.state, library);
+      if (!turnbased && !is_coop) {
+        currstate = parse_state(currstate);
+      }
+      var newscore = 1.0 * cache[currstate].total_utility[role_idx] / cache[currstate].num_visits;
+      console.log("action: " + possible_moves[i][role_idx] + " utility: " + cache[currstate].total_utility[role_idx] + " numvisits: " + cache[currstate].num_visits + " score: " + newscore);
       if (newscore > score) {
         score = newscore;
-        action = actions[i];
+        action = possible_moves[i][role_idx];
       }
     }
-
     return action;
-
   }
 }
 
