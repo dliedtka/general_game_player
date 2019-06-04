@@ -30,7 +30,7 @@ var playclock = 0;
 
 var roles = seq();
 var state = null;
-const padtime = 1000; // TODO: decrease to one sec?
+const padtime = 2000; // TODO: decrease to one sec?
 var cache = {};
 var first_run = true;
 var nomove_mcts = false;
@@ -72,7 +72,7 @@ function start(id, r, rs, sc, pc) // TODO: headstart
   var count = 0;
   while (true) {
     const elapsed = Date.now() - start_time;
-    if (elapsed >= 1500) {
+    if (elapsed >= 2000) {
       break;
     }
     var role_rewards = depthcharge(role, state, library, start_time);
@@ -85,9 +85,9 @@ function start(id, r, rs, sc, pc) // TODO: headstart
     count += 1;
   }
 
-  const count_over_time = 1.0 * count / 1.5;
+  const count_over_time = 1.0 * count / 2.0;
   console.log(count_over_time);
-  if (count_over_time < 5) {
+  if (count_over_time < 10) {
     use_heuristics = true;
   }
 
@@ -381,23 +381,28 @@ function bestmove(role, state, library, start_time) {
   return mcts(role, state, library, start_time);
 }
 
-function parse_state(state) {
-  var parsed = [];
-  for (var i = 0; i < state.length; i++) {
-    if (state[i][1].includes(role) || state[i][1].includes('step')) {
-      parsed.push(state[i]);
-    }
-  }
-  return parsed;
-}
+// function parse_state(state) {
+//   // var parsed = [];
+//   // for (var i = 0; i < state.length; i++) {
+//   //   if (state[i][1].includes(role) || state[i][1].includes('step')) {
+//   //     parsed.push(state[i]);
+//   //   }
+//   // }
+//   return state;
+// }
 
 // monte carlo tree search
 function mcts(curr_role, state, library, start_time) {
 
   var role_idx = 0;
   if (turnbased) {
-    while (findlegals(roles[role_idx], state, library).length === 1) {
+    var legals = findlegals(roles[role_idx], state, library);
+    while (legals.length === 1) {
+      if (role_idx === roles.length - 1) {
+        break;
+      }
       role_idx++;
+      legals = findlegals(roles[role_idx], state, library);
     }
     curr_role = roles[role_idx];
   } else {
@@ -420,9 +425,7 @@ function mcts(curr_role, state, library, start_time) {
   //console.log(cache[node.state].total_utility);
   //console.log(cache[node.state].num_visits);
   var root = cache[state];
-  if (!turnbased && !is_coop) {
-    root = cache[parse_state(state)];
-  }
+
   var start_visits = root.num_visits;
 
   var counter = 0;
@@ -468,7 +471,7 @@ function mcts(curr_role, state, library, start_time) {
 function generate_node(state, library) {
 
   // if state already in keyspace of cache, return
-  if (state in cache || (!turnbased && !is_coop && parse_state(state) in cache)) {
+  if (state in cache) {
     return;
   }
 
@@ -488,12 +491,8 @@ function generate_node(state, library) {
   for (var i = 0; i < roles.length; i++) {
     node.total_utility[i] = 0;
   }
-  if (!turnbased && !is_coop) {
-    cache[parse_state(state)] = node;
-  } else {
-    cache[node.state] = node;
-  }
-
+  cache[node.state] = node;
+  
   return;
 }
 
@@ -564,7 +563,7 @@ function select(node, library, role_idx) {
 function selectfn(node, role_idx, parent_node) {
   var C = 50.0;
   if (roles.length === 1 || (!turnbased && !is_coop)) {
-    C = 150.0;
+    C = 100.0;
   }
   return node.total_utility[role_idx] / node.num_visits + C * Math.sqrt(Math.log(parent_node.num_visits) / node.num_visits);
   //return Math.random(); // used for some debugging
@@ -587,11 +586,7 @@ function expand(node, library) {
     //var newnode = generate_node(newstate, node, library);
     //node.children[node.children.length] = newnode;
     generate_node(newstate, library);
-    if (!turnbased && !is_coop) {
-      node.children[node.children.length] = cache[parse_state(newstate)]
-    } else {
-      node.children[node.children.length] = cache[newstate];
-    }
+    node.children[node.children.length] = cache[newstate];
   }
 }
 
@@ -611,20 +606,11 @@ function generate_moves_helper(state, library, current_role_idx, moves, move) {
 
   var current_role = roles[current_role_idx];
   var actions = findlegals(current_role, state, library);
-
-  if (!turnbased && !is_coop && current_role !== role) {
+  for (var i = 0; i < actions.length; i++) {
     var newmove = move.slice();
-    newmove[current_role_idx] = actions[0];
+    newmove[current_role_idx] = actions[i];
 
     generate_moves_helper(state, library, current_role_idx + 1, moves, newmove);
-  } else {
-
-    for (var i = 0; i < actions.length; i++) {
-      var newmove = move.slice();
-      newmove[current_role_idx] = actions[i];
-
-      generate_moves_helper(state, library, current_role_idx + 1, moves, newmove);
-    }
   }
 
   return moves;
@@ -678,9 +664,6 @@ function simulation(role, library, node) { // TODO: might not need role, return 
 function backpropagate(states_visited, scores) {
   for (var i = 0; i < states_visited.length; i++) {
     var node = cache[states_visited[i]];
-    if (!turnbased && !is_coop) {
-      node = cache[parse_state(states_visited[i])];
-    }
 
     for (var j = 0; j < roles.length; j++) {
       node.total_utility[j] += scores[j];
@@ -798,9 +781,6 @@ function best_action(node, role_idx, library) {
     for (var i = 0; i < possible_moves.length; i++) {
       // logging
       var currstate = simulate(possible_moves[i], node.state, library);
-      if (!turnbased && !is_coop) {
-        currstate = parse_state(currstate);
-      }
       var newscore = 1.0 * cache[currstate].total_utility[role_idx] / cache[currstate].num_visits;
       console.log("action: " + possible_moves[i][role_idx] + " utility: " + cache[currstate].total_utility[role_idx] + " numvisits: " + cache[currstate].num_visits + " score: " + newscore);
       if (newscore > score) {

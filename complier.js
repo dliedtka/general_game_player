@@ -648,8 +648,8 @@ function programoneviewsubgoal (rule,n,blist,out)
      {return programoneviewsubbf(rule,n,blist,out)};
   if (rule[n].length-1===2 && compfbp(rule[n],blist))
      {return programoneviewsubfb(rule,n,blist,out)};
-  if (rule[n].length-1===3 && compffbp(rule[n],blist))
-     {return programoneviewsubffb(rule,n,blist,out)};
+  //if (rule[n].length-1===3 && compffbp(rule[n],blist))
+  //   {return programoneviewsubffb(rule,n,blist,out)};
   if (compfreep(rule[n],blist))
      {return programoneviewsubfree(rule,n,blist,out)};
   if (n===rule.length-1)
@@ -979,8 +979,8 @@ function programallviewsubgoal (rule,n,blist,out)
      {return programallviewsubbf(rule,n,blist,out)};
   if (rule[n].length-1===2 && compfbp(rule[n],blist))
      {return programallviewsubfb(rule,n,blist,out)};
-  if (rule[n].length-1===3 && compffbp(rule[n],blist))
-     {return programallviewsubffb(rule,n,blist,out)};
+  //if (rule[n].length-1===3 && compffbp(rule[n],blist))
+  //   {return programallviewsubffb(rule,n,blist,out)};
   if (compfreep(rule[n],blist))
      {return programallviewsubfree(rule,n,blist,out)};
   return programallviewsubdb(rule,n,blist,out)}
